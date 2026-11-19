@@ -350,7 +350,7 @@ public:
             g_xstepCurrentAngle = 0.0f;
             g_xstepIntroTimer = 3.35f;
             pl->resetLevel();
-            FMODAudioEngine::sharedEngine()->pauseAllMusic(true);
+            FMODAudioEngine::sharedEngine()->stopAllMusic(true);
             if (pl->m_player1) {
                 pl->m_player1->m_isLocked = true;
                 g_xstepLastFlipped = pl->m_player1->m_isUpsideDown;
@@ -586,7 +586,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
             if (pct >= 8.50f && pct <= 8.70f) {
                 g_xstepPromptOpen = true;
                 this->m_player1->m_isLocked = true;
-                FMODAudioEngine::sharedEngine()->pauseAllMusic(true);
+                FMODAudioEngine::sharedEngine()->stopAllMusic(true);
                 auto alert = FLAlertLayer::create(
                     &g_xstepPopupHandler,
                     "Mysterious Secret",
@@ -628,7 +628,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
                     this->m_player1->setPositionX(0.0f);
                     if (g_xstepIntroTimer <= 0.0f) {
                         this->m_player1->m_isLocked = false;
-                        FMODAudioEngine::sharedEngine()->resumeAllMusic();
+                        this->startMusic();
                     }
                     return;
                 }
