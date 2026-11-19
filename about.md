@@ -1,0 +1,2 @@
+# Hidden Secrets in Main Levels
+Thanks you for trying this mod. I developed it because (I guess) people are bored in Main Levels; because they maybe finished all of them. So I added hidden secrets in main levels. ENJOY! 🥳
