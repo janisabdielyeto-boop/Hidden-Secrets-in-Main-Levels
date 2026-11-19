@@ -51,22 +51,22 @@ struct SecretEntry {
 
 static const std::vector<SecretEntry> g_implementedSecrets = {
     {
-        1, "secret_1", "Secret Madness", "Reverse Mode",
-        "Rewinds the end wall and lets you play the entire level backwards from 100.00% down to 0.00% with reversed music!",
-        "Near the end of Secret Madness, hit the hidden Toggle Orb above the final ship section before touching the end wall.",
-        "ring_05_001.png"
+        1, "secret_1", "Stereo Madness", "Reverse Mode",
+        "Activates Reverse Mode at the end of Level 1: Stereo Madness!\n\nInstead of finishing the level normally, the end wall rewinds backwards and you fly the entire level in reverse from 100.00% down to 0.00% with reversed music and sound effects.",
+        "1. Play Level 1: Stereo Madness (or Secret Madness).\n2. Near the very end of the final ship section, fly high above the normal path (or hit the hidden Toggle Orb in Secret Madness) right before touching the end wall.\n3. When the 'Reverse Secret' prompt appears, click YES!",
+        ""
     },
     {
-        10, "secret_10", "Secretstep", "Mysterious Secret (Warp Reality)",
-        "Tilts the camera on every jump (-5°), pad (+30°), orb (+15°) and gravity portal (-25°) after a 3-second rule intro!",
-        "At 4.93% in Secretstep, intentionally miss the yellow orb and crash on the spike beneath the hanging pillar.",
-        "portal_01_front_001.png"
+        10, "secret_10", "xStep", "Mysterious Secret (Warp Reality)",
+        "Warps reality in Level 10: xStep!\n\nEvery action tilts the entire camera angle dynamically:\n- Every normal jump: -5 degrees\n- Every pad: +30 degrees\n- Every orb: +15 degrees\n- Every gravity portal: -25 degrees",
+        "1. Play Level 10: xStep (or Secretstep).\n2. At exactly 4.93%, intentionally miss the yellow orb and crash into the spike beneath the hanging pillar.\n3. When 'Mysterious Secret' pops up, click YES and watch the 3-second intro before the cube and music start!",
+        ""
     },
     {
-        22, "secret_22", "Secret Dash", "Ultimate Crash",
-        "Locks the camera on the final Wave and loops it 25 times faster and higher-pitched until the game crashes!",
-        "In Secret Dash around 82%, jump into the hidden orb beneath the ULTIMATE CRASH sign before the big Wave portal.",
-        "GJ_timeIcon_001.png"
+        22, "secret_22", "Dash", "Ultimate Crash",
+        "Triggers the Ultimate Crash loop in Level 22: Dash!\n\nLocks the camera on the final Wave section and loops it 25 times in a row. On every loop, both the game speed and music pitch increase until the game crashes on loop 25!",
+        "1. Play Level 22: Dash (or Secret Dash).\n2. Around 82%, right before entering the final big Wave portal, jump high into the hidden secret zone beneath the ULTIMATE CRASH sign.\n3. Enter the big Wave portal and survive the 25 accelerating loops!",
+        ""
     }
 };
 
@@ -91,44 +91,59 @@ static int getUnlockedSecretsCount() {
 class SecretDetailPopup : public FLAlertLayer {
 protected:
     bool init(int idx) {
-        if (!FLAlertLayer::init(150)) return false;
+        if (!FLAlertLayer::init(160)) return false;
         const auto& s = g_implementedSecrets[idx];
         bool unlocked = isSecretUnlocked(s.key);
         auto win = CCDirector::sharedDirector()->getWinSize();
 
         auto bg = extension::CCScale9Sprite::create("GJ_square01.png");
-        bg->setContentSize({ 360.0f, 240.0f });
+        bg->setContentSize({ 380.0f, 250.0f });
         bg->setPosition({ win.width * 0.5f, win.height * 0.5f });
         m_mainLayer->addChild(bg);
 
-        auto titleLbl = CCLabelBMFont::create(fmt::format("#{} {} - {}", s.levelNum, s.levelName, unlocked ? s.secretTitle : "Locked Secret").c_str(), "bigFont.fnt");
-        titleLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 98.0f });
-        titleLbl->setScale(0.45f);
-        m_mainLayer->addChild(titleLbl);
+        auto headerLbl = CCLabelBMFont::create(fmt::format("Level {}: {}", s.levelNum, s.levelName).c_str(), "goldFont.fnt");
+        headerLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 104.0f });
+        headerLbl->setScale(0.75f);
+        m_mainLayer->addChild(headerLbl);
 
-        auto spr = CCSprite::createWithSpriteFrameName(s.iconSprite);
-        if (spr) {
-            spr->setPosition({ win.width * 0.5f, win.height * 0.5f + 56.0f });
-            spr->setScale(0.95f);
-            if (!unlocked) spr->setColor({ 110, 110, 110 });
-            m_mainLayer->addChild(spr);
-        }
+        auto subLbl = CCLabelBMFont::create(unlocked ? s.secretTitle : "??? (Locked Secret)", "bigFont.fnt");
+        subLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 81.0f });
+        subLbl->setScale(0.46f);
+        subLbl->setColor(unlocked ? ccColor3B{ 120, 255, 140 } : ccColor3B{ 255, 210, 90 });
+        m_mainLayer->addChild(subLbl);
 
-        auto statusLbl = CCLabelBMFont::create(unlocked ? "STATUS: DISCOVERED" : "STATUS: NOT DISCOVERED YET", "goldFont.fnt");
-        statusLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 22.0f });
-        statusLbl->setScale(0.55f);
-        m_mainLayer->addChild(statusLbl);
+        auto innerBox = extension::CCScale9Sprite::create("square02b_001.png");
+        innerBox->setColor({ 0, 0, 0 });
+        innerBox->setOpacity(95);
+        innerBox->setContentSize({ 334.0f, 166.0f });
+        innerBox->setPosition({ win.width * 0.5f, win.height * 0.5f - 16.0f });
+        m_mainLayer->addChild(innerBox);
 
-        std::string body = fmt::format(
-            "What it is:\n{}\n\nHow to find it:\n{}",
-            unlocked ? s.whatItIs : "??? (Discover this secret to reveal full details!)",
+        auto scroll = geode::ScrollLayer::create({ 320.0f, 154.0f });
+        scroll->setPosition({ win.width * 0.5f - 160.0f, win.height * 0.5f - 93.0f });
+        m_mainLayer->addChild(scroll);
+
+        auto scrollbar = geode::Scrollbar::create(scroll);
+        scrollbar->setPosition({ win.width * 0.5f + 168.0f, win.height * 0.5f - 16.0f });
+        m_mainLayer->addChild(scrollbar);
+
+        std::string fullText = fmt::format(
+            "STATUS: {}\n\n--- WHAT IT IS ---\n{}\n\n--- HOW TO FIND IT ---\n{}",
+            unlocked ? "DISCOVERED!" : "NOT DISCOVERED YET",
+            unlocked ? s.whatItIs : "??? (Discover this secret in-game to unlock its full description!)",
             s.howToFind
         );
-        auto textLbl = CCLabelBMFont::create(body.c_str(), "chatFont.fnt");
-        textLbl->setWidth(316.0f);
-        textLbl->setPosition({ win.width * 0.5f, win.height * 0.5f - 44.0f });
-        textLbl->setScale(0.80f);
-        m_mainLayer->addChild(textLbl);
+
+        auto textLbl = CCLabelBMFont::create(fullText.c_str(), "chatFont.fnt");
+        textLbl->setWidth(308.0f);
+        textLbl->setAnchorPoint({ 0.5f, 1.0f });
+        textLbl->setScale(0.88f);
+
+        float contentH = std::max(154.0f, textLbl->getScaledContentSize().height + 24.0f);
+        scroll->m_contentLayer->setContentSize({ 320.0f, contentH });
+        textLbl->setPosition({ 160.0f, contentH - 12.0f });
+        scroll->m_contentLayer->addChild(textLbl);
+        scroll->moveToTop();
 
         auto menu = CCMenu::create();
         menu->setPosition({ 0.0f, 0.0f });
@@ -136,7 +151,7 @@ protected:
 
         auto closeSpr = CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png");
         auto closeBtn = CCMenuItemSpriteExtra::create(closeSpr, this, menu_selector(SecretDetailPopup::onClose));
-        closeBtn->setPosition({ win.width * 0.5f - 172.0f, win.height * 0.5f + 112.0f });
+        closeBtn->setPosition({ win.width * 0.5f - 182.0f, win.height * 0.5f + 116.0f });
         menu->addChild(closeBtn);
         return true;
     }
@@ -159,19 +174,19 @@ public:
 class SecretsCodexPopup : public FLAlertLayer {
 protected:
     bool init() {
-        if (!FLAlertLayer::init(150)) return false;
+        if (!FLAlertLayer::init(160)) return false;
         int found = getUnlockedSecretsCount();
         int total = static_cast<int>(g_implementedSecrets.size());
         auto win = CCDirector::sharedDirector()->getWinSize();
 
         auto bg = extension::CCScale9Sprite::create("GJ_square01.png");
-        bg->setContentSize({ 360.0f, 230.0f });
+        bg->setContentSize({ 376.0f, 236.0f });
         bg->setPosition({ win.width * 0.5f, win.height * 0.5f });
         m_mainLayer->addChild(bg);
 
         auto titleLbl = CCLabelBMFont::create(fmt::format("Hidden Secrets Codex ({}/{})", found, total).c_str(), "goldFont.fnt");
-        titleLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 94.0f });
-        titleLbl->setScale(0.72f);
+        titleLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 96.0f });
+        titleLbl->setScale(0.74f);
         m_mainLayer->addChild(titleLbl);
 
         auto menu = CCMenu::create();
@@ -180,29 +195,29 @@ protected:
 
         auto closeSpr = CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png");
         auto closeBtn = CCMenuItemSpriteExtra::create(closeSpr, this, menu_selector(SecretsCodexPopup::onClose));
-        closeBtn->setPosition({ win.width * 0.5f - 172.0f, win.height * 0.5f + 107.0f });
+        closeBtn->setPosition({ win.width * 0.5f - 180.0f, win.height * 0.5f + 110.0f });
         menu->addChild(closeBtn);
 
         for (int i = 0; i < total; ++i) {
             const auto& s = g_implementedSecrets[i];
             bool unlocked = isSecretUnlocked(s.key);
             std::string btnText = fmt::format(
-                "#{} {} : {} [{}]",
+                "Level {}: {} - {} [{}]",
                 s.levelNum,
                 s.levelName,
                 unlocked ? s.secretTitle : "???",
                 unlocked ? "FOUND" : "LOCKED"
             );
-            auto spr = ButtonSprite::create(btnText.c_str(), 280, true, "bigFont.fnt", unlocked ? "GJ_button_01.png" : "GJ_button_04.png", 32.0f, 0.5f);
+            auto spr = ButtonSprite::create(btnText.c_str(), 300, true, "goldFont.fnt", unlocked ? "GJ_button_01.png" : "GJ_button_02.png", 34.0f, 0.62f);
             auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(SecretsCodexPopup::onSelectSecret));
             btn->setTag(i);
             btn->setPosition({ win.width * 0.5f, win.height * 0.5f + 46.0f - (i * 46.0f) });
             menu->addChild(btn);
         }
 
-        auto tip = CCLabelBMFont::create("Click any secret to see what it is & how to find it!", "chatFont.fnt");
-        tip->setPosition({ win.width * 0.5f, win.height * 0.5f - 94.0f });
-        tip->setScale(0.75f);
+        auto tip = CCLabelBMFont::create("Click any level to read full details & how to find its secret!", "chatFont.fnt");
+        tip->setPosition({ win.width * 0.5f, win.height * 0.5f - 96.0f });
+        tip->setScale(0.76f);
         m_mainLayer->addChild(tip);
         return true;
     }
@@ -442,10 +457,10 @@ class $modify(SecretPauseHook, PauseLayer) {
 
         auto spr = ButtonSprite::create(
             fmt::format("Secrets: {}/{}", found, total).c_str(),
-            135, true, "goldFont.fnt", "GJ_button_05.png", 26.0f, 0.6f
+            96, true, "goldFont.fnt", "GJ_button_05.png", 22.0f, 0.52f
         );
         auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(SecretPauseHook::onOpenCodex));
-        btn->setPosition({ win.width - 82.0f, 28.0f });
+        btn->setPosition({ win.width - 88.0f, 34.0f });
         menu->addChild(btn);
     }
 
