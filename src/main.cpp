@@ -203,15 +203,15 @@ static int getSecretLevelIndex(GJGameLevel* lvl) {
 }
 
 static bool isSecretMadnessLevel(GJGameLevel* lvl) {
-    return lvl && (getSecretLevelIndex(lvl) == 1 || (lvl->m_levelID == 0 && lvl->m_songID == 0));
+    return lvl && (lvl->m_levelID == 1 || getSecretLevelIndex(lvl) == 1 || (lvl->m_levelID == 0 && lvl->m_songID == 0));
 }
 
 static bool isSecretStepLevel(GJGameLevel* lvl) {
-    return lvl && (getSecretLevelIndex(lvl) == 10 || std::string(lvl->m_levelName).find("step") != std::string::npos || lvl->m_songID == 9);
+    return lvl && (lvl->m_levelID == 10 || getSecretLevelIndex(lvl) == 10 || std::string(lvl->m_levelName).find("step") != std::string::npos || lvl->m_songID == 9);
 }
 
 static bool isSecretDashLevel(GJGameLevel* lvl) {
-    return lvl && (getSecretLevelIndex(lvl) == 22 || std::string(lvl->m_levelName).find("Dash") != std::string::npos || lvl->m_songID == 22);
+    return lvl && (lvl->m_levelID == 22 || getSecretLevelIndex(lvl) == 22 || std::string(lvl->m_levelName).find("Dash") != std::string::npos || lvl->m_songID == 22);
 }
 
 static void applyDashSpeedAndPitch(PlayLayer* pl, float speed) {
