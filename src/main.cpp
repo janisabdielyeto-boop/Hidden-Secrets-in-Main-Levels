@@ -115,7 +115,8 @@ protected:
             unlocked ? s.whatItIs : "??? (Discover this secret to reveal full details!)",
             s.howToFind
         );
-        auto textLbl = CCLabelBMFont::create(body.c_str(), "chatFont.fnt", size.width - 44.0f, kCCTextAlignmentCenter);
+        auto textLbl = CCLabelBMFont::create(body.c_str(), "chatFont.fnt");
+        textLbl->setWidth(size.width - 44.0f);
         textLbl->setPosition({ size.width * 0.5f, 76.0f });
         textLbl->setScale(0.82f);
         m_mainLayer->addChild(textLbl);
