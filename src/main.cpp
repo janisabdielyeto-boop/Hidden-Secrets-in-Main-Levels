@@ -583,7 +583,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
     void destroyPlayer(PlayerObject* player, GameObject* obj) {
         if (isSecretStepLevel(this->m_level) && obj && !g_xstepPromptOpen) {
             float pct = this->getCurrentPercent();
-            if (pct >= 4.65f && pct <= 5.25f) {
+            if (pct >= 8.50f && pct <= 8.70f) {
                 g_xstepPromptOpen = true;
                 this->m_player1->m_isLocked = true;
                 FMODAudioEngine::sharedEngine()->pauseAllMusic(true);
