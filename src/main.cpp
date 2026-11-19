@@ -32,6 +32,8 @@ static float g_xstepIntroTimer = 0.0f;
 static float g_xstepTargetAngle = 0.0f;
 static float g_xstepCurrentAngle = 0.0f;
 static bool g_xstepLastFlipped = false;
+static bool g_xstepWasOnGround = true;
+static bool g_xstepSkipNextJump = false;
 
 static EndLevelLayer* g_endLayer = nullptr;
 static Ref<CCNode> g_levelCompleteNode = nullptr;
@@ -142,7 +144,7 @@ public:
             g_xstepCurrentAngle = 0.0f;
             g_xstepIntroTimer = 3.35f;
             pl->resetLevel();
-            FMODAudioEngine::sharedEngine()->pauseAllMusic();
+            FMODAudioEngine::sharedEngine()->pauseAllMusic(true);
             if (pl->m_player1) {
                 pl->m_player1->m_isLocked = true;
                 g_xstepLastFlipped = pl->m_player1->m_isUpsideDown;
@@ -350,7 +352,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
             if (pct >= 4.65f && pct <= 5.25f) {
                 g_xstepPromptOpen = true;
                 this->m_player1->m_isLocked = true;
-                FMODAudioEngine::sharedEngine()->pauseAllMusic();
+                FMODAudioEngine::sharedEngine()->pauseAllMusic(true);
                 auto alert = FLAlertLayer::create(
                     &g_xstepPopupHandler,
                     "Mysterious Secret",
@@ -369,6 +371,14 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         if (g_reverseModeActive) g_playerReallyDied = true;
     }
 
+    void bumpPlayer(PlayerObject* p0, EffectGameObject* p1) {
+        PlayLayer::bumpPlayer(p0, p1);
+        if (isSecretStepLevel(this->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f) {
+            g_xstepTargetAngle += 30.0f;
+            g_xstepSkipNextJump = true;
+        }
+    }
+
     void postUpdate(float dt) {
         PlayLayer::postUpdate(dt);
         if (!this->m_player1) return;
@@ -385,11 +395,17 @@ class $modify(HiddenSecretsMod, PlayLayer) {
                     this->m_player1->setPositionX(0.0f);
                     if (g_xstepIntroTimer <= 0.0f) {
                         this->m_player1->m_isLocked = false;
-                        FMODAudioEngine::sharedEngine()->resumeAllMusic();
+                        FMODAudioEngine::sharedEngine()->resumeAllMusic(true);
                     }
                     return;
                 }
 
+                bool onGround = this->m_player1->m_isOnGround;
+                if (g_xstepWasOnGround && !onGround && !this->m_player1->m_isShip && !this->m_player1->m_isDart && !this->m_player1->m_isSwing && !this->m_player1->m_isBall && !this->m_player1->m_isBird) {
+                    if (g_xstepSkipNextJump) g_xstepSkipNextJump = false;
+                    else g_xstepTargetAngle -= 5.0f;
+                }
+                g_xstepWasOnGround = onGround;
                 if (this->m_player1->m_isUpsideDown != g_xstepLastFlipped) {
                     g_xstepLastFlipped = this->m_player1->m_isUpsideDown;
                     g_xstepTargetAngle -= 25.0f;
@@ -595,28 +611,13 @@ class $modify(ReverseEndLayerHook, EndLevelLayer) {
 };
 
 class $modify(SecretOrbHook, PlayerObject) {
-    void jump(float p0, bool p1, bool p2) {
-        PlayerObject::jump(p0, p1, p2);
-        auto* pl = PlayLayer::get();
-        if (pl && isSecretStepLevel(pl->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f && !this->m_isShip && !this->m_isDart && !this->m_isSwing) {
-            g_xstepTargetAngle -= 5.0f;
-        }
-    }
-
-    void bump(EffectGameObject* p0) {
-        PlayerObject::bump(p0);
-        auto* pl = PlayLayer::get();
-        if (pl && isSecretStepLevel(pl->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f) {
-            g_xstepTargetAngle += 30.0f;
-        }
-    }
-
     void ringJump(RingObject* ring, bool p1) {
         PlayerObject::ringJump(ring, p1);
         auto* pl = PlayLayer::get();
         if (!ring || !pl) return;
         if (isSecretStepLevel(pl->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f) {
             g_xstepTargetAngle += 15.0f;
+            g_xstepSkipNextJump = true;
         }
         if (ring->m_objectID == 1594 && isSecretMadnessLevel(pl->m_level)) {
             g_orbActivated = true;
