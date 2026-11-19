@@ -395,7 +395,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
                     this->m_player1->setPositionX(0.0f);
                     if (g_xstepIntroTimer <= 0.0f) {
                         this->m_player1->m_isLocked = false;
-                        FMODAudioEngine::sharedEngine()->resumeAllMusic(true);
+                        FMODAudioEngine::sharedEngine()->resumeAllMusic();
                     }
                     return;
                 }
