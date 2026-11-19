@@ -88,25 +88,34 @@ static int getUnlockedSecretsCount() {
     return count;
 }
 
-class SecretDetailPopup : public geode::Popup {
+class SecretDetailPopup : public FLAlertLayer {
 protected:
     bool init(int idx) {
-        if (!Popup::init(360.0f, 240.0f)) return false;
+        if (!FLAlertLayer::init(150)) return false;
         const auto& s = g_implementedSecrets[idx];
         bool unlocked = isSecretUnlocked(s.key);
-        this->setTitle(fmt::format("#{} {} - {}", s.levelNum, s.levelName, unlocked ? s.secretTitle : "Locked Secret"));
+        auto win = CCDirector::sharedDirector()->getWinSize();
 
-        auto size = m_mainLayer->getContentSize();
+        auto bg = extension::CCScale9Sprite::create("GJ_square01.png");
+        bg->setContentSize({ 360.0f, 240.0f });
+        bg->setPosition({ win.width * 0.5f, win.height * 0.5f });
+        m_mainLayer->addChild(bg);
+
+        auto titleLbl = CCLabelBMFont::create(fmt::format("#{} {} - {}", s.levelNum, s.levelName, unlocked ? s.secretTitle : "Locked Secret").c_str(), "bigFont.fnt");
+        titleLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 98.0f });
+        titleLbl->setScale(0.45f);
+        m_mainLayer->addChild(titleLbl);
+
         auto spr = CCSprite::createWithSpriteFrameName(s.iconSprite);
         if (spr) {
-            spr->setPosition({ size.width * 0.5f, size.height - 62.0f });
+            spr->setPosition({ win.width * 0.5f, win.height * 0.5f + 56.0f });
             spr->setScale(0.95f);
             if (!unlocked) spr->setColor({ 110, 110, 110 });
             m_mainLayer->addChild(spr);
         }
 
         auto statusLbl = CCLabelBMFont::create(unlocked ? "STATUS: DISCOVERED" : "STATUS: NOT DISCOVERED YET", "goldFont.fnt");
-        statusLbl->setPosition({ size.width * 0.5f, size.height - 96.0f });
+        statusLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 22.0f });
         statusLbl->setScale(0.55f);
         m_mainLayer->addChild(statusLbl);
 
@@ -116,11 +125,24 @@ protected:
             s.howToFind
         );
         auto textLbl = CCLabelBMFont::create(body.c_str(), "chatFont.fnt");
-        textLbl->setWidth(size.width - 44.0f);
-        textLbl->setPosition({ size.width * 0.5f, 76.0f });
-        textLbl->setScale(0.82f);
+        textLbl->setWidth(316.0f);
+        textLbl->setPosition({ win.width * 0.5f, win.height * 0.5f - 44.0f });
+        textLbl->setScale(0.80f);
         m_mainLayer->addChild(textLbl);
+
+        auto menu = CCMenu::create();
+        menu->setPosition({ 0.0f, 0.0f });
+        m_mainLayer->addChild(menu);
+
+        auto closeSpr = CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png");
+        auto closeBtn = CCMenuItemSpriteExtra::create(closeSpr, this, menu_selector(SecretDetailPopup::onClose));
+        closeBtn->setPosition({ win.width * 0.5f - 172.0f, win.height * 0.5f + 112.0f });
+        menu->addChild(closeBtn);
         return true;
+    }
+
+    void onClose(CCObject*) {
+        this->keyBackClicked();
     }
 public:
     static SecretDetailPopup* create(int idx) {
@@ -134,18 +156,32 @@ public:
     }
 };
 
-class SecretsCodexPopup : public geode::Popup {
+class SecretsCodexPopup : public FLAlertLayer {
 protected:
     bool init() {
-        if (!Popup::init(360.0f, 230.0f)) return false;
+        if (!FLAlertLayer::init(150)) return false;
         int found = getUnlockedSecretsCount();
         int total = static_cast<int>(g_implementedSecrets.size());
-        this->setTitle(fmt::format("Hidden Secrets Codex ({}/{})", found, total));
+        auto win = CCDirector::sharedDirector()->getWinSize();
 
-        auto size = m_mainLayer->getContentSize();
+        auto bg = extension::CCScale9Sprite::create("GJ_square01.png");
+        bg->setContentSize({ 360.0f, 230.0f });
+        bg->setPosition({ win.width * 0.5f, win.height * 0.5f });
+        m_mainLayer->addChild(bg);
+
+        auto titleLbl = CCLabelBMFont::create(fmt::format("Hidden Secrets Codex ({}/{})", found, total).c_str(), "goldFont.fnt");
+        titleLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 94.0f });
+        titleLbl->setScale(0.72f);
+        m_mainLayer->addChild(titleLbl);
+
         auto menu = CCMenu::create();
         menu->setPosition({ 0.0f, 0.0f });
         m_mainLayer->addChild(menu);
+
+        auto closeSpr = CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png");
+        auto closeBtn = CCMenuItemSpriteExtra::create(closeSpr, this, menu_selector(SecretsCodexPopup::onClose));
+        closeBtn->setPosition({ win.width * 0.5f - 172.0f, win.height * 0.5f + 107.0f });
+        menu->addChild(closeBtn);
 
         for (int i = 0; i < total; ++i) {
             const auto& s = g_implementedSecrets[i];
@@ -160,15 +196,19 @@ protected:
             auto spr = ButtonSprite::create(btnText.c_str(), 280, true, "bigFont.fnt", unlocked ? "GJ_button_01.png" : "GJ_button_04.png", 32.0f, 0.5f);
             auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(SecretsCodexPopup::onSelectSecret));
             btn->setTag(i);
-            btn->setPosition({ size.width * 0.5f, size.height - 68.0f - (i * 46.0f) });
+            btn->setPosition({ win.width * 0.5f, win.height * 0.5f + 46.0f - (i * 46.0f) });
             menu->addChild(btn);
         }
 
         auto tip = CCLabelBMFont::create("Click any secret to see what it is & how to find it!", "chatFont.fnt");
-        tip->setPosition({ size.width * 0.5f, 22.0f });
+        tip->setPosition({ win.width * 0.5f, win.height * 0.5f - 94.0f });
         tip->setScale(0.75f);
         m_mainLayer->addChild(tip);
         return true;
+    }
+
+    void onClose(CCObject*) {
+        this->keyBackClicked();
     }
 
     void onSelectSecret(CCObject* sender) {
