@@ -5,6 +5,7 @@
 #include <Geode/modify/CCKeyboardDispatcher.hpp>
 #include <vector>
 #include <string>
+#include <cmath>
 using namespace geode::prelude;
 
 static bool g_orbActivated = false;
@@ -24,6 +25,13 @@ static int g_dashLoopCount = 0;
 static CCPoint g_dashWaveStartPos = { 0.0f, 0.0f };
 static CCPoint g_dashFixedCamPos = { 0.0f, 0.0f };
 static unsigned int g_dashWaveMusicMS = 0;
+
+static bool g_xstepPromptOpen = false;
+static bool g_xstepWarpActive = false;
+static float g_xstepIntroTimer = 0.0f;
+static float g_xstepTargetAngle = 0.0f;
+static float g_xstepCurrentAngle = 0.0f;
+static bool g_xstepLastFlipped = false;
 
 static EndLevelLayer* g_endLayer = nullptr;
 static Ref<CCNode> g_levelCompleteNode = nullptr;
@@ -51,6 +59,10 @@ static bool isSecretMadnessLevel(GJGameLevel* lvl) {
     return lvl && (getSecretLevelIndex(lvl) == 1 || (lvl->m_levelID == 0 && lvl->m_songID == 0));
 }
 
+static bool isSecretStepLevel(GJGameLevel* lvl) {
+    return lvl && (getSecretLevelIndex(lvl) == 10 || std::string(lvl->m_levelName).find("step") != std::string::npos || lvl->m_songID == 9);
+}
+
 static bool isSecretDashLevel(GJGameLevel* lvl) {
     return lvl && (getSecretLevelIndex(lvl) == 22 || std::string(lvl->m_levelName).find("Dash") != std::string::npos || lvl->m_songID == 22);
 }
@@ -63,6 +75,84 @@ static void applyDashSpeedAndPitch(PlayLayer* pl, float speed) {
         fmod->m_backgroundMusicChannel->setPitch(speed);
     }
 }
+
+static void showXstepRulesBanner(PlayLayer* pl) {
+    if (!pl) return;
+    auto win = CCDirector::sharedDirector()->getWinSize();
+    auto container = CCNode::create();
+    container->setPosition({ win.width * 0.5f, win.height * 0.52f });
+    container->setScale(0.0f);
+    container->setZOrder(250);
+
+    const char* sprites[4] = {
+        "portal_01_front_001.png",
+        "bump_03_001.png",
+        "ring_01_001.png",
+        nullptr
+    };
+    const char* values[4] = { "-25°", "+30°", "+15°", "-5°" };
+    float offsetsX[4] = { -150.0f, -50.0f, 50.0f, 150.0f };
+
+    for (int i = 0; i < 4; ++i) {
+        if (sprites[i]) {
+            auto spr = CCSprite::createWithSpriteFrameName(sprites[i]);
+            if (spr) {
+                spr->setPosition({ offsetsX[i], 18.0f });
+                spr->setScale(i == 0 ? 0.65f : 0.85f);
+                container->addChild(spr);
+            }
+        } else {
+            auto titleLbl = CCLabelBMFont::create("Every jump", "goldFont.fnt");
+            titleLbl->setPosition({ offsetsX[i], 18.0f });
+            titleLbl->setScale(0.55f);
+            container->addChild(titleLbl);
+        }
+        auto valLbl = CCLabelBMFont::create(values[i], "bigFont.fnt");
+        valLbl->setPosition({ offsetsX[i], -24.0f });
+        valLbl->setScale(0.62f);
+        container->addChild(valLbl);
+    }
+
+    pl->addChild(container);
+    container->runAction(CCSequence::create(
+        CCEaseBackOut::create(CCScaleTo::create(0.35f, 1.0f)),
+        CCDelayTime::create(3.0f),
+        CCEaseIn::create(CCMoveBy::create(0.45f, { 0.0f, -260.0f }), 2.0f),
+        CCRemoveSelf::create(),
+        nullptr
+    ));
+}
+class XstepPromptPopup : public FLAlertLayerProtocol {
+public:
+    void FLAlert_Clicked(FLAlertLayer* layer, bool btn2) override {
+        if (layer) {
+            layer->setVisible(false);
+            layer->removeFromParentAndCleanup(true);
+        }
+        g_xstepPromptOpen = false;
+        auto* pl = PlayLayer::get();
+        if (!pl) return;
+
+        if (!btn2) {
+            g_xstepWarpActive = false;
+            pl->resetLevel();
+        } else {
+            g_xstepWarpActive = true;
+            g_xstepTargetAngle = 0.0f;
+            g_xstepCurrentAngle = 0.0f;
+            g_xstepIntroTimer = 3.35f;
+            pl->resetLevel();
+            FMODAudioEngine::sharedEngine()->pauseAllMusic();
+            if (pl->m_player1) {
+                pl->m_player1->m_isLocked = true;
+                g_xstepLastFlipped = pl->m_player1->m_isUpsideDown;
+            }
+            showXstepRulesBanner(pl);
+        }
+    }
+};
+
+static XstepPromptPopup g_xstepPopupHandler;
 
 class ReversePromptPopup : public FLAlertLayerProtocol {
 public:
@@ -145,6 +235,7 @@ public:
 };
 
 static ReversePromptPopup g_reversePopupHandler;
+
 class $modify(HiddenSecretsMod, PlayLayer) {
     struct Fields {
         bool m_waitingPrompt = false;
@@ -170,6 +261,11 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         g_dashInWave = false;
         g_dashCamFixed = false;
         g_dashLoopCount = 0;
+        g_xstepPromptOpen = false;
+        g_xstepWarpActive = false;
+        g_xstepIntroTimer = 0.0f;
+        g_xstepTargetAngle = 0.0f;
+        g_xstepCurrentAngle = 0.0f;
         applyDashSpeedAndPitch(this, 1.0f);
         g_endLayer = nullptr;
         g_levelCompleteNode = nullptr;
@@ -192,6 +288,11 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         g_dashInWave = false;
         g_dashCamFixed = false;
         g_dashLoopCount = 0;
+        g_xstepPromptOpen = false;
+        g_xstepWarpActive = false;
+        g_xstepIntroTimer = 0.0f;
+        g_xstepTargetAngle = 0.0f;
+        g_xstepCurrentAngle = 0.0f;
         applyDashSpeedAndPitch(this, 1.0f);
         g_endLayer = nullptr;
         g_levelCompleteNode = nullptr;
@@ -200,8 +301,17 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         m_fields->m_camStopTimer = 0.0f;
         PlayLayer::resetLevelFromStart();
     }
-
     void resetLevel() {
+        if (isSecretStepLevel(this->m_level)) {
+            if (g_xstepPromptOpen) return;
+            g_xstepTargetAngle = 0.0f;
+            g_xstepCurrentAngle = 0.0f;
+            if (this->m_objectLayer) this->m_objectLayer->setRotation(0.0f);
+            this->m_gameState.m_cameraAngle = 0.0f;
+            PlayLayer::resetLevel();
+            if (this->m_player1) g_xstepLastFlipped = this->m_player1->m_isUpsideDown;
+            return;
+        }
         if (isSecretDashLevel(this->m_level)) {
             g_dashCrashArmed = false;
             g_dashInWave = false;
@@ -235,6 +345,23 @@ class $modify(HiddenSecretsMod, PlayLayer) {
     }
 
     void destroyPlayer(PlayerObject* player, GameObject* obj) {
+        if (isSecretStepLevel(this->m_level) && obj && !g_xstepPromptOpen) {
+            float pct = this->getCurrentPercent();
+            if (pct >= 4.65f && pct <= 5.25f) {
+                g_xstepPromptOpen = true;
+                this->m_player1->m_isLocked = true;
+                FMODAudioEngine::sharedEngine()->pauseAllMusic();
+                auto alert = FLAlertLayer::create(
+                    &g_xstepPopupHandler,
+                    "Mysterious Secret",
+                    "Do you want to <cp>warp reality</c>?",
+                    "No",
+                    "Yes"
+                );
+                alert->show();
+                return;
+            }
+        }
         if (isSecretMadnessLevel(this->m_level) && g_reverseModeActive && (g_introTimer > 0.0f || g_reverseOutroActive || (obj && (!obj->isVisible() || obj->m_isHide || obj->getOpacity() == 0)))) {
             return;
         }
@@ -246,9 +373,36 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         PlayLayer::postUpdate(dt);
         if (!this->m_player1) return;
 
+        if (isSecretStepLevel(this->m_level)) {
+            if (g_xstepPromptOpen) {
+                this->m_player1->m_isLocked = true;
+                return;
+            }
+            if (g_xstepWarpActive) {
+                if (g_xstepIntroTimer > 0.0f) {
+                    g_xstepIntroTimer -= dt;
+                    this->m_player1->m_isLocked = true;
+                    this->m_player1->setPositionX(0.0f);
+                    if (g_xstepIntroTimer <= 0.0f) {
+                        this->m_player1->m_isLocked = false;
+                        FMODAudioEngine::sharedEngine()->resumeAllMusic();
+                    }
+                    return;
+                }
+
+                if (this->m_player1->m_isUpsideDown != g_xstepLastFlipped) {
+                    g_xstepLastFlipped = this->m_player1->m_isUpsideDown;
+                    g_xstepTargetAngle -= 25.0f;
+                }
+
+                g_xstepCurrentAngle += (g_xstepTargetAngle - g_xstepCurrentAngle) * std::min(1.0f, dt * 8.0f);
+                this->m_gameState.m_cameraAngle = g_xstepCurrentAngle;
+            }
+            return;
+        }
+
         if (isSecretDashLevel(this->m_level)) {
             float px = this->m_player1->getPositionX();
-            if (this->m_player1->m_isShip && this->m_player1->getPositionY() > 282.0f) { this->m_player1->setPositionY(282.0f); if (this->m_player1->m_yVelocity > 0.0) this->m_player1->m_yVelocity = 0.0; }
             float py = this->m_player1->getPositionY();
 
             if (!g_dashCrashArmed && px > 21000.0f && py > 195.0f) {
@@ -381,7 +535,10 @@ class $modify(HiddenSecretsMod, PlayLayer) {
             }
 
             float px = this->m_player1->getPositionX();
-            if (this->m_player1->m_isShip && this->m_player1->getPositionY() > 282.0f) { this->m_player1->setPositionY(282.0f); if (this->m_player1->m_yVelocity > 0.0) this->m_player1->m_yVelocity = 0.0; }
+            if (this->m_player1->m_isShip && this->m_player1->getPositionY() > 282.0f) {
+                this->m_player1->setPositionY(282.0f);
+                if (this->m_player1->m_yVelocity > 0.0) this->m_player1->m_yVelocity = 0.0;
+            }
             float pct = (px / g_savedEndX) * 100.0f;
             if (pct < 0.0f) pct = 0.0f;
             if (pct > 100.0f) pct = 100.0f;
@@ -438,10 +595,29 @@ class $modify(ReverseEndLayerHook, EndLevelLayer) {
 };
 
 class $modify(SecretOrbHook, PlayerObject) {
+    void jump(float p0, bool p1, bool p2) {
+        PlayerObject::jump(p0, p1, p2);
+        auto* pl = PlayLayer::get();
+        if (pl && isSecretStepLevel(pl->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f && !this->m_isShip && !this->m_isDart && !this->m_isSwing) {
+            g_xstepTargetAngle -= 5.0f;
+        }
+    }
+
+    void bump(EffectGameObject* p0) {
+        PlayerObject::bump(p0);
+        auto* pl = PlayLayer::get();
+        if (pl && isSecretStepLevel(pl->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f) {
+            g_xstepTargetAngle += 30.0f;
+        }
+    }
+
     void ringJump(RingObject* ring, bool p1) {
         PlayerObject::ringJump(ring, p1);
         auto* pl = PlayLayer::get();
         if (!ring || !pl) return;
+        if (isSecretStepLevel(pl->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f) {
+            g_xstepTargetAngle += 15.0f;
+        }
         if (ring->m_objectID == 1594 && isSecretMadnessLevel(pl->m_level)) {
             g_orbActivated = true;
             g_savedEndX = this->getPositionX();
