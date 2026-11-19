@@ -88,9 +88,10 @@ static int getUnlockedSecretsCount() {
     return count;
 }
 
-class SecretDetailPopup : public geode::Popup<int> {
+class SecretDetailPopup : public geode::Popup {
 protected:
-    bool setup(int idx) override {
+    bool init(int idx) {
+        if (!Popup::init(360.0f, 240.0f)) return false;
         const auto& s = g_implementedSecrets[idx];
         bool unlocked = isSecretUnlocked(s.key);
         this->setTitle(fmt::format("#{} {} - {}", s.levelNum, s.levelName, unlocked ? s.secretTitle : "Locked Secret"));
@@ -110,19 +111,20 @@ protected:
         m_mainLayer->addChild(statusLbl);
 
         std::string body = fmt::format(
-            "<cy>What it is:</c>\n{}\n\n<cg>How to find it:</c>\n{}",
+            "What it is:\n{}\n\nHow to find it:\n{}",
             unlocked ? s.whatItIs : "??? (Discover this secret to reveal full details!)",
             s.howToFind
         );
-        auto textArea = TextArea::create(body, "chatFont.fnt", 1.0f, size.width - 44.0f, { 0.5f, 0.5f }, 16.0f, false);
-        textArea->setPosition({ size.width * 0.5f, 78.0f });
-        m_mainLayer->addChild(textArea);
+        auto textLbl = CCLabelBMFont::create(body.c_str(), "chatFont.fnt", size.width - 44.0f, kCCTextAlignmentCenter);
+        textLbl->setPosition({ size.width * 0.5f, 76.0f });
+        textLbl->setScale(0.82f);
+        m_mainLayer->addChild(textLbl);
         return true;
     }
 public:
     static SecretDetailPopup* create(int idx) {
         auto ret = new SecretDetailPopup();
-        if (ret && ret->initAnchored(360.0f, 240.0f, idx)) {
+        if (ret && ret->init(idx)) {
             ret->autorelease();
             return ret;
         }
@@ -131,9 +133,10 @@ public:
     }
 };
 
-class SecretsCodexPopup : public geode::Popup<> {
+class SecretsCodexPopup : public geode::Popup {
 protected:
-    bool setup() override {
+    bool init() {
+        if (!Popup::init(360.0f, 230.0f)) return false;
         int found = getUnlockedSecretsCount();
         int total = static_cast<int>(g_implementedSecrets.size());
         this->setTitle(fmt::format("Hidden Secrets Codex ({}/{})", found, total));
@@ -175,7 +178,7 @@ protected:
 public:
     static SecretsCodexPopup* create() {
         auto ret = new SecretsCodexPopup();
-        if (ret && ret->initAnchored(360.0f, 230.0f)) {
+        if (ret && ret->init()) {
             ret->autorelease();
             return ret;
         }
@@ -231,14 +234,14 @@ static void showXstepRulesBanner(PlayLayer* pl) {
     container->setScale(0.0f);
     container->setZOrder(250);
 
-    const char* sprites = {
+    const char* sprites[] = {
         "portal_01_front_001.png",
         "bump_03_001.png",
         "ring_01_001.png",
         nullptr
     };
-    const char* values = { "-25°", "+30°", "+15°", "-5°" };
-    float offsetsX = { -150.0f, -50.0f, 50.0f, 150.0f };
+    const char* values[] = { "-25°", "+30°", "+15°", "-5°" };
+    float offsetsX[] = { -150.0f, -50.0f, 50.0f, 150.0f };
 
     for (int i = 0; i < 4; ++i) {
         if (sprites[i]) {
