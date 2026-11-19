@@ -1,0 +1,17 @@
+{
+    "geode": "6.0.0-alpha.1",
+    "gd": {
+        "win": "2.2091"
+    },
+    "id": "janis25.secrets_in_main_levels",
+    "name": "Hidden Secrets in Main Levels",
+    "version": "v1.1.0",
+    "developer": "Janis25",
+    "description": "Hidden secrets in main levels!",
+    "resources": {
+        "files": [
+            "resources/*.ogg",
+            "resources/*.mp3"
+        ]
+    }
+}
