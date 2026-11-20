@@ -1,0 +1,10 @@
+---
+name: Bug Report
+about: Signaler un bug sur un secret ou sur la Secrets List
+title: "[BUG] "
+labels: bug
+---
+
+**Niveau concerné :** (ex: Level 1: Stereo Madness, Level 10: xStep, Level 22: Dash...)
+**Que s'est-il passé ?**
+**Comment reproduire le bug ?**
