@@ -136,12 +136,13 @@ protected:
 
         auto textLbl = CCLabelBMFont::create(fullText.c_str(), "chatFont.fnt");
         textLbl->setWidth(308.0f);
-        textLbl->setAnchorPoint({ 0.5f, 1.0f });
+        textLbl->setAnchorPoint({ 0.0f, 1.0f });
+        textLbl->setAlignment(kCCTextAlignmentLeft);
         textLbl->setScale(0.88f);
 
         float contentH = std::max(154.0f, textLbl->getScaledContentSize().height + 24.0f);
         scroll->m_contentLayer->setContentSize({ 320.0f, contentH });
-        textLbl->setPosition({ 160.0f, contentH - 12.0f });
+        textLbl->setPosition({ 8.0f, contentH - 10.0f });
         scroll->m_contentLayer->addChild(textLbl);
         scroll->moveToTop();
 
@@ -208,7 +209,7 @@ protected:
                 unlocked ? s.secretTitle : "???",
                 unlocked ? "FOUND" : "LOCKED"
             );
-            auto spr = ButtonSprite::create(btnText.c_str(), 300, true, "goldFont.fnt", unlocked ? "GJ_button_01.png" : "GJ_button_02.png", 34.0f, 0.62f);
+            auto spr = ButtonSprite::create(btnText.c_str(), 300, true, "goldFont.fnt", unlocked ? "GJ_button_01.png" : "GJ_button_04.png", 34.0f, 0.62f);
             auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(SecretsCodexPopup::onSelectSecret));
             btn->setTag(i);
             btn->setPosition({ win.width * 0.5f, win.height * 0.5f + 46.0f - (i * 46.0f) });
@@ -448,19 +449,15 @@ class $modify(SecretPauseHook, PauseLayer) {
     void customSetup() {
         PauseLayer::customSetup();
         auto win = CCDirector::sharedDirector()->getWinSize();
-        int found = getUnlockedSecretsCount();
-        int total = static_cast<int>(g_implementedSecrets.size());
 
         auto menu = CCMenu::create();
         menu->setPosition({ 0.0f, 0.0f });
         this->addChild(menu);
 
-        auto spr = ButtonSprite::create(
-            fmt::format("Secrets: {}/{}", found, total).c_str(),
-            96, true, "goldFont.fnt", "GJ_button_05.png", 22.0f, 0.52f
-        );
-        auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(SecretPauseHook::onOpenCodex));
-        btn->setPosition({ win.width - 88.0f, 34.0f });
+        auto infoSpr = CCSprite::createWithSpriteFrameName("GJ_infoIcon_001.png");
+        infoSpr->setScale(0.78f);
+        auto btn = CCMenuItemSpriteExtra::create(infoSpr, this, menu_selector(SecretPauseHook::onOpenCodex));
+        btn->setPosition({ win.width - 28.0f, win.height - 102.0f });
         menu->addChild(btn);
     }
 
@@ -470,7 +467,6 @@ class $modify(SecretPauseHook, PauseLayer) {
         }
     }
 };
-
 class $modify(HiddenSecretsMod, PlayLayer) {
     struct Fields {
         bool m_waitingPrompt = false;
