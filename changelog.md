@@ -1,11 +1,10 @@
-# 1.1.0
-- First secret in **Secret Madness** (*Stereo Madness*) added! 🥳
+# Changelog
 
-**How to find it:**
+## v1.1.0
+- Added **Level 10: xStep** secret (*Time Secret / Warp Time*) with 3-second rule intro and dynamic m_timeWarp + music pitch modifiers (-30%, +20%, +10%, -5%).
+- Added **Secrets List** codex and scrollable detail popups inside the Pause menu (Secrets button).
+- Enabled secret triggers on both official main levels (ID 1, 10, 22) and custom level copies.
 
-When you go to the end of the level, you will see a Toggle Orb. Click on it! It will activate a secret called **Reverse Mode**, so you will restart the level... **IN REVERSE**.
-
-*Note:* This cannot be seen in the third coin's route, and when you click this orb, all the Secret Coins disappear. **ENJOY!** 👀😎
-
-# 1.0.0
-- Initial release! 🥳
+## v1.0.0
+- Added **Level 1: Stereo Madness** *Reverse Mode* (100.00% -> 0.00%) with rewinding end wall and reversed audio.
+- Added **Level 22: Dash** *Ultimate Crash* 25x accelerating Wave loop.
