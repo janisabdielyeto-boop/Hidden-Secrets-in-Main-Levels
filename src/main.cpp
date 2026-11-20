@@ -131,15 +131,19 @@ protected:
         float scrollH = innerH - 12.0f;
 
         std::string fullText = fmt::format(
-            "**STATUS:** {}\n\n### WHAT IT IS\n{}\n\n### HOW TO FIND IT\n{}",
+            "STATUS: {}\n\n--- WHAT IT IS ---\n{}\n\n--- HOW TO FIND IT ---\n{}",
             unlocked ? "DISCOVERED!" : "NOT DISCOVERED YET",
             unlocked ? s.whatItIs : "??? (Discover this secret in-game to unlock its full description!)",
             s.howToFind
         );
 
-        auto mdArea = geode::MDTextArea::create(fullText, { innerW - 12.0f, innerH - 12.0f });
-        mdArea->setPosition({ win.width * 0.5f, win.height * 0.5f - 18.0f });
-        m_mainLayer->addChild(mdArea);
+        auto textLbl = CCLabelBMFont::create(fullText.c_str(), "chatFont.fnt");
+        textLbl->setScale(0.78f);
+        textLbl->setWidth((innerW - 24.0f) / 0.78f);
+        textLbl->setAlignment(kCCTextAlignmentLeft);
+        textLbl->setAnchorPoint({ 0.0f, 1.0f });
+        textLbl->setPosition({ win.width * 0.5f - innerW * 0.5f + 12.0f, win.height * 0.5f - 18.0f + innerH * 0.5f - 10.0f });
+        m_mainLayer->addChild(textLbl);
 
         auto menu = CCMenu::create();
         menu->setPosition({ 0.0f, 0.0f });
