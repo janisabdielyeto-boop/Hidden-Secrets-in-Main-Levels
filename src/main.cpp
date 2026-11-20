@@ -30,8 +30,10 @@ static unsigned int g_dashWaveMusicMS = 0;
 static bool g_xstepPromptOpen = false;
 static bool g_xstepWarpActive = false;
 static float g_xstepIntroTimer = 0.0f;
-static float g_xstepTargetAngle = 0.0f;
-static float g_xstepCurrentAngle = 0.0f;
+static float g_xstepDeathDelay = 0.0f;
+static float g_xstepCooldown = 0.0f;
+static float g_xstepTargetAngle = 1.0f;
+static float g_xstepCurrentAngle = 1.0f;
 static bool g_xstepLastFlipped = false;
 static bool g_xstepWasOnGround = true;
 static bool g_xstepSkipNextJump = false;
@@ -57,8 +59,8 @@ static const std::vector<SecretEntry> g_implementedSecrets = {
         ""
     },
     {
-        10, "secret_10", "xStep", "Mysterious Secret (Warp Reality)",
-        "Warps reality in Level 10: xStep!\n\nEvery action tilts the entire camera angle dynamically:\n- Every normal jump: -5 degrees\n- Every pad: +30 degrees\n- Every orb: +15 degrees\n- Every gravity portal: -25 degrees",
+        10, "secret_10", "xStep", "Time Secret (Warp Time)",
+        "Warps reality in Level 10: xStep!\n\nEvery action tilts the entire camera angle dynamically:\n- Every normal jump: -5% degrees\n- Every pad: +20% degrees\n- Every orb: +10% degrees\n- Every gravity portal: -30% degrees",
         "1. Play Level 10: xStep (or Secretstep).\n2. At exactly 4.93%, intentionally miss the yellow orb and crash into the spike beneath the hanging pillar.\n3. When 'Mysterious Secret' pops up, click YES and watch the 3-second intro before the cube and music start!",
         ""
     },
@@ -91,60 +93,53 @@ static int getUnlockedSecretsCount() {
 class SecretDetailPopup : public FLAlertLayer {
 protected:
     bool init(int idx) {
-        if (!FLAlertLayer::init(160)) return false;
+        if (!FLAlertLayer::init(180)) return false;
         const auto& s = g_implementedSecrets[idx];
         bool unlocked = isSecretUnlocked(s.key);
         auto win = CCDirector::sharedDirector()->getWinSize();
 
+        float boxW = win.width - 60.0f;
+        float boxH = win.height - 40.0f;
+
         auto bg = extension::CCScale9Sprite::create("GJ_square01.png");
-        bg->setContentSize({ 380.0f, 250.0f });
+        bg->setContentSize({ boxW, boxH });
         bg->setPosition({ win.width * 0.5f, win.height * 0.5f });
         m_mainLayer->addChild(bg);
 
         auto headerLbl = CCLabelBMFont::create(fmt::format("Level {}: {}", s.levelNum, s.levelName).c_str(), "goldFont.fnt");
-        headerLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 104.0f });
-        headerLbl->setScale(0.75f);
+        headerLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + boxH * 0.5f - 22.0f });
+        headerLbl->setScale(0.78f);
         m_mainLayer->addChild(headerLbl);
 
         auto subLbl = CCLabelBMFont::create(unlocked ? s.secretTitle : "??? (Locked Secret)", "bigFont.fnt");
-        subLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 81.0f });
+        subLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + boxH * 0.5f - 45.0f });
         subLbl->setScale(0.46f);
         subLbl->setColor(unlocked ? ccColor3B{ 120, 255, 140 } : ccColor3B{ 255, 210, 90 });
         m_mainLayer->addChild(subLbl);
 
+        float innerW = boxW - 44.0f;
+        float innerH = boxH - 82.0f;
+
         auto innerBox = extension::CCScale9Sprite::create("square02b_001.png");
         innerBox->setColor({ 0, 0, 0 });
-        innerBox->setOpacity(95);
-        innerBox->setContentSize({ 334.0f, 166.0f });
-        innerBox->setPosition({ win.width * 0.5f, win.height * 0.5f - 16.0f });
+        innerBox->setOpacity(110);
+        innerBox->setContentSize({ innerW, innerH });
+        innerBox->setPosition({ win.width * 0.5f, win.height * 0.5f - 18.0f });
         m_mainLayer->addChild(innerBox);
 
-        auto scroll = geode::ScrollLayer::create({ 320.0f, 154.0f });
-        scroll->setPosition({ win.width * 0.5f - 160.0f, win.height * 0.5f - 93.0f });
-        m_mainLayer->addChild(scroll);
-
-        auto scrollbar = geode::Scrollbar::create(scroll);
-        scrollbar->setPosition({ win.width * 0.5f + 168.0f, win.height * 0.5f - 16.0f });
-        m_mainLayer->addChild(scrollbar);
+        float scrollW = innerW - 22.0f;
+        float scrollH = innerH - 12.0f;
 
         std::string fullText = fmt::format(
-            "STATUS: {}\n\n--- WHAT IT IS ---\n{}\n\n--- HOW TO FIND IT ---\n{}",
+            "**STATUS:** {}\n\n### WHAT IT IS\n{}\n\n### HOW TO FIND IT\n{}",
             unlocked ? "DISCOVERED!" : "NOT DISCOVERED YET",
             unlocked ? s.whatItIs : "??? (Discover this secret in-game to unlock its full description!)",
             s.howToFind
         );
 
-        auto textLbl = CCLabelBMFont::create(fullText.c_str(), "chatFont.fnt");
-        textLbl->setWidth(308.0f);
-        textLbl->setAnchorPoint({ 0.0f, 1.0f });
-        textLbl->setAlignment(kCCTextAlignmentLeft);
-        textLbl->setScale(0.88f);
-
-        float contentH = std::max(154.0f, textLbl->getScaledContentSize().height + 24.0f);
-        scroll->m_contentLayer->setContentSize({ 320.0f, contentH });
-        textLbl->setPosition({ 8.0f, contentH - 10.0f });
-        scroll->m_contentLayer->addChild(textLbl);
-        scroll->moveToTop();
+        auto mdArea = geode::MDTextArea::create(fullText, { innerW - 12.0f, innerH - 12.0f });
+        mdArea->setPosition({ win.width * 0.5f, win.height * 0.5f - 18.0f });
+        m_mainLayer->addChild(mdArea);
 
         auto menu = CCMenu::create();
         menu->setPosition({ 0.0f, 0.0f });
@@ -152,7 +147,7 @@ protected:
 
         auto closeSpr = CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png");
         auto closeBtn = CCMenuItemSpriteExtra::create(closeSpr, this, menu_selector(SecretDetailPopup::onClose));
-        closeBtn->setPosition({ win.width * 0.5f - 182.0f, win.height * 0.5f + 116.0f });
+        closeBtn->setPosition({ win.width * 0.5f - boxW * 0.5f + 8.0f, win.height * 0.5f + boxH * 0.5f - 8.0f });
         menu->addChild(closeBtn);
         return true;
     }
@@ -175,49 +170,58 @@ public:
 class SecretsCodexPopup : public FLAlertLayer {
 protected:
     bool init() {
-        if (!FLAlertLayer::init(160)) return false;
+        if (!FLAlertLayer::init(180)) return false;
         int found = getUnlockedSecretsCount();
         int total = static_cast<int>(g_implementedSecrets.size());
         auto win = CCDirector::sharedDirector()->getWinSize();
 
+        float boxW = win.width - 70.0f;
+        float boxH = win.height - 52.0f;
+
         auto bg = extension::CCScale9Sprite::create("GJ_square01.png");
-        bg->setContentSize({ 376.0f, 236.0f });
+        bg->setContentSize({ boxW, boxH });
         bg->setPosition({ win.width * 0.5f, win.height * 0.5f });
         m_mainLayer->addChild(bg);
 
-        auto titleLbl = CCLabelBMFont::create(fmt::format("Hidden Secrets Codex ({}/{})", found, total).c_str(), "goldFont.fnt");
-        titleLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + 96.0f });
-        titleLbl->setScale(0.74f);
+        auto titleLbl = CCLabelBMFont::create("Secrets List", "goldFont.fnt");
+        titleLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + boxH * 0.5f - 22.0f });
+        titleLbl->setScale(0.82f);
         m_mainLayer->addChild(titleLbl);
 
+        float listW = boxW - 44.0f;
+        float listH = boxH - 76.0f;
+
+        auto listBg = extension::CCScale9Sprite::create("square02b_001.png");
+        listBg->setColor({ 0, 0, 0 });
+        listBg->setOpacity(95);
+        listBg->setContentSize({ listW, listH });
+        listBg->setPosition({ win.width * 0.5f, win.height * 0.5f - 4.0f });
+        m_mainLayer->addChild(listBg);
+
+        auto listMenu = CCMenu::create();
+        listMenu->setPosition({ win.width * 0.5f, win.height * 0.5f - 4.0f });
+        m_mainLayer->addChild(listMenu);
+        for (int i = 0; i < total; ++i) {
+            const auto& s = g_implementedSecrets[i];
+            bool unlocked = isSecretUnlocked(s.key);
+            std::string btnText = fmt::format("Level {}: {} - {} [{}]", s.levelNum, s.levelName, unlocked ? s.secretTitle : "???", unlocked ? "FOUND" : "LOCKED");
+            auto spr = ButtonSprite::create(btnText.c_str(), static_cast<int>(listW - 44.0f), true, "goldFont.fnt", unlocked ? "GJ_button_01.png" : "GJ_button_04.png", 26.0f, 0.48f);
+            auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(SecretsCodexPopup::onSelectSecret));
+            btn->setTag(i);
+            btn->setPosition({ 0.0f, (listH * 0.5f) - 26.0f - (i * 34.0f) });
+            listMenu->addChild(btn);
+        }
         auto menu = CCMenu::create();
         menu->setPosition({ 0.0f, 0.0f });
         m_mainLayer->addChild(menu);
 
         auto closeSpr = CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png");
         auto closeBtn = CCMenuItemSpriteExtra::create(closeSpr, this, menu_selector(SecretsCodexPopup::onClose));
-        closeBtn->setPosition({ win.width * 0.5f - 180.0f, win.height * 0.5f + 110.0f });
+        closeBtn->setPosition({ win.width * 0.5f - boxW * 0.5f + 8.0f, win.height * 0.5f + boxH * 0.5f - 8.0f });
         menu->addChild(closeBtn);
 
-        for (int i = 0; i < total; ++i) {
-            const auto& s = g_implementedSecrets[i];
-            bool unlocked = isSecretUnlocked(s.key);
-            std::string btnText = fmt::format(
-                "Level {}: {} - {} [{}]",
-                s.levelNum,
-                s.levelName,
-                unlocked ? s.secretTitle : "???",
-                unlocked ? "FOUND" : "LOCKED"
-            );
-            auto spr = ButtonSprite::create(btnText.c_str(), 300, true, "goldFont.fnt", unlocked ? "GJ_button_01.png" : "GJ_button_04.png", 34.0f, 0.62f);
-            auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(SecretsCodexPopup::onSelectSecret));
-            btn->setTag(i);
-            btn->setPosition({ win.width * 0.5f, win.height * 0.5f + 46.0f - (i * 46.0f) });
-            menu->addChild(btn);
-        }
-
         auto tip = CCLabelBMFont::create("Click any level to read full details & how to find its secret!", "chatFont.fnt");
-        tip->setPosition({ win.width * 0.5f, win.height * 0.5f - 96.0f });
+        tip->setPosition({ win.width * 0.5f, win.height * 0.5f - boxH * 0.5f + 16.0f });
         tip->setScale(0.76f);
         m_mainLayer->addChild(tip);
         return true;
@@ -263,11 +267,11 @@ static int getSecretLevelIndex(GJGameLevel* lvl) {
 }
 
 static bool isSecretMadnessLevel(GJGameLevel* lvl) {
-    return lvl && (lvl->m_levelID == 1 || getSecretLevelIndex(lvl) == 1 || (lvl->m_levelID == 0 && lvl->m_songID == 0));
+    return lvl && (lvl->m_levelID == 1 || getSecretLevelIndex(lvl) == 1 || (lvl->m_levelID == 0 && (lvl->m_songID == 0 || std::string(lvl->m_levelName).find("Madness") != std::string::npos)));
 }
 
 static bool isSecretStepLevel(GJGameLevel* lvl) {
-    return lvl && (lvl->m_levelID == 10 || getSecretLevelIndex(lvl) == 10 || std::string(lvl->m_levelName).find("step") != std::string::npos || lvl->m_songID == 9);
+    return lvl && (lvl->m_levelID == 10 || getSecretLevelIndex(lvl) == 10 || std::string(lvl->m_levelName).find("step") != std::string::npos || std::string(lvl->m_levelName).find("Step") != std::string::npos || lvl->m_songID == 9);
 }
 
 static bool isSecretDashLevel(GJGameLevel* lvl) {
@@ -297,7 +301,7 @@ static void showXstepRulesBanner(PlayLayer* pl) {
         "ring_01_001.png",
         nullptr
     };
-    const char* values[] = { "-25°", "+30°", "+15°", "-5°" };
+    const char* values[] = { "-30% Speed", "+20% Speed", "+10% Speed", "-5% Speed" };
     float offsetsX[] = { -150.0f, -50.0f, 50.0f, 150.0f };
 
     for (int i = 0; i < 4; ++i) {
@@ -316,7 +320,7 @@ static void showXstepRulesBanner(PlayLayer* pl) {
         }
         auto valLbl = CCLabelBMFont::create(values[i], "bigFont.fnt");
         valLbl->setPosition({ offsetsX[i], -24.0f });
-        valLbl->setScale(0.62f);
+        valLbl->setScale(0.42f);
         container->addChild(valLbl);
     }
 
@@ -347,8 +351,8 @@ public:
         } else {
             unlockSecret("secret_10");
             g_xstepWarpActive = true;
-            g_xstepTargetAngle = 0.0f;
-            g_xstepCurrentAngle = 0.0f;
+            g_xstepTargetAngle = 1.0f;
+            g_xstepCurrentAngle = 1.0f;
             g_xstepIntroTimer = 3.35f;
             pl->resetLevel();
             FMODAudioEngine::sharedEngine()->stopAllMusic(true);
@@ -454,10 +458,9 @@ class $modify(SecretPauseHook, PauseLayer) {
         menu->setPosition({ 0.0f, 0.0f });
         this->addChild(menu);
 
-        auto infoSpr = CCSprite::createWithSpriteFrameName("GJ_infoIcon_001.png");
-        infoSpr->setScale(0.78f);
-        auto btn = CCMenuItemSpriteExtra::create(infoSpr, this, menu_selector(SecretPauseHook::onOpenCodex));
-        btn->setPosition({ win.width - 28.0f, win.height - 102.0f });
+        auto spr = ButtonSprite::create("Secrets", 84, true, "goldFont.fnt", "GJ_button_05.png", 20.0f, 0.52f);
+        auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(SecretPauseHook::onOpenCodex));
+        btn->setPosition({ win.width - 86.0f, 36.0f });
         menu->addChild(btn);
     }
 
@@ -495,8 +498,8 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         g_xstepPromptOpen = false;
         g_xstepWarpActive = false;
         g_xstepIntroTimer = 0.0f;
-        g_xstepTargetAngle = 0.0f;
-        g_xstepCurrentAngle = 0.0f;
+        g_xstepTargetAngle = 1.0f;
+        g_xstepCurrentAngle = 1.0f;
         applyDashSpeedAndPitch(this, 1.0f);
         g_endLayer = nullptr;
         g_levelCompleteNode = nullptr;
@@ -522,8 +525,8 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         g_xstepPromptOpen = false;
         g_xstepWarpActive = false;
         g_xstepIntroTimer = 0.0f;
-        g_xstepTargetAngle = 0.0f;
-        g_xstepCurrentAngle = 0.0f;
+        g_xstepTargetAngle = 1.0f;
+        g_xstepCurrentAngle = 1.0f;
         applyDashSpeedAndPitch(this, 1.0f);
         g_endLayer = nullptr;
         g_levelCompleteNode = nullptr;
@@ -536,10 +539,10 @@ class $modify(HiddenSecretsMod, PlayLayer) {
     void resetLevel() {
         if (isSecretStepLevel(this->m_level)) {
             if (g_xstepPromptOpen) return;
-            g_xstepTargetAngle = 0.0f;
-            g_xstepCurrentAngle = 0.0f;
+            g_xstepTargetAngle = 1.0f;
+            g_xstepCurrentAngle = 1.0f;
             if (this->m_objectLayer) this->m_objectLayer->setRotation(0.0f);
-            this->m_gameState.m_cameraAngle = 0.0f;
+            applyDashSpeedAndPitch(this, 1.0f);
             PlayLayer::resetLevel();
             if (this->m_player1) g_xstepLastFlipped = this->m_player1->m_isUpsideDown;
             return;
@@ -604,7 +607,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
     void bumpPlayer(PlayerObject* p0, EffectGameObject* p1) {
         PlayLayer::bumpPlayer(p0, p1);
         if (isSecretStepLevel(this->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f) {
-            g_xstepTargetAngle += 30.0f;
+            g_xstepTargetAngle = std::min(2.50f, g_xstepTargetAngle + 0.20f);
             g_xstepSkipNextJump = true;
         }
     }
@@ -614,7 +617,14 @@ class $modify(HiddenSecretsMod, PlayLayer) {
 
         if (isSecretStepLevel(this->m_level)) {
             if (g_xstepPromptOpen) {
-                this->m_player1->m_isLocked = true;
+                if (g_xstepDeathDelay > 0.0f) {
+                    g_xstepDeathDelay -= dt;
+                    if (g_xstepDeathDelay <= 0.0f) {
+                        FMODAudioEngine::sharedEngine()->stopAllMusic(true);
+                        auto alert = FLAlertLayer::create(&g_xstepPopupHandler, "Time Secret", "Do you want to <cp>warp time</c>?", "No", "Yes");
+                        alert->show();
+                    }
+                }
                 return;
             }
             if (g_xstepWarpActive) {
@@ -632,17 +642,17 @@ class $modify(HiddenSecretsMod, PlayLayer) {
                 bool onGround = this->m_player1->m_isOnGround;
                 if (g_xstepWasOnGround && !onGround && !this->m_player1->m_isShip && !this->m_player1->m_isDart && !this->m_player1->m_isSwing && !this->m_player1->m_isBall && !this->m_player1->m_isBird) {
                     if (g_xstepSkipNextJump) g_xstepSkipNextJump = false;
-                    else g_xstepTargetAngle -= 5.0f;
+                    else g_xstepTargetAngle = std::max(0.35f, g_xstepTargetAngle - 0.05f);
                 }
                 g_xstepWasOnGround = onGround;
 
                 if (this->m_player1->m_isUpsideDown != g_xstepLastFlipped) {
                     g_xstepLastFlipped = this->m_player1->m_isUpsideDown;
-                    g_xstepTargetAngle -= 25.0f;
+                    g_xstepTargetAngle = std::max(0.35f, g_xstepTargetAngle - 0.30f);
                 }
 
-                g_xstepCurrentAngle += (g_xstepTargetAngle - g_xstepCurrentAngle) * std::min(1.0f, dt * 8.0f);
-                this->m_gameState.m_cameraAngle = g_xstepCurrentAngle;
+                g_xstepCurrentAngle += (g_xstepTargetAngle - g_xstepCurrentAngle) * std::min(1.0f, dt * 4.5f);
+                applyDashSpeedAndPitch(this, g_xstepCurrentAngle);
             }
             return;
         }
@@ -847,7 +857,7 @@ class $modify(SecretOrbHook, PlayerObject) {
         auto* pl = PlayLayer::get();
         if (!ring || !pl) return;
         if (isSecretStepLevel(pl->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f) {
-            g_xstepTargetAngle += 15.0f;
+            g_xstepTargetAngle = std::min(2.50f, g_xstepTargetAngle + 0.10f);
             g_xstepSkipNextJump = true;
         }
         if (ring->m_objectID == 1594 && isSecretMadnessLevel(pl->m_level)) {
