@@ -2,7 +2,6 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/PauseLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
-#include <Geode/modify/GJBaseGameLayer.hpp>
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -25,24 +24,32 @@ static const std::vector<SecretDef> g_implementedSecrets = {
         1,
         "Stereo Madness",
         "Reverse Mode",
-        "Plays the end-wall reverse curve & ring shockwave, rewinds from 100.00% down to 0.00% in balanced Free Mode with reversed music!",
-        "1. Play Level 1: Stereo Madness (or Secret Madness).\n2. Fly to the very top at the end of the final ship section.\n3. Click/tap the hidden toggle orb to open Reverse Secret and press YES!"
+        "Plays the end-wall reverse curve and ring shockwave, then\nrewinds from 100.00% down to 0.00% in balanced Free Mode!",
+        "Step 1: Open Level 1 (Stereo Madness or Secret Madness).\nStep 2: Fly to the top at the end of the final ship section.\nStep 3: Click or tap the hidden toggle orb and press YES!"
     },
-    {"secret_level_2",2,"Back on Track","Gravity Chaos","Automatically flips your gravity every 2.5 seconds with a warning flash and sound all the way to the end!","Step 1: Open Level 2 (Back on Track).\nStep 2: At the very start (around 1.70% to 2.00%), jump\nover the first spike and land on the second spike.\nStep 3: Wait for your cube to explode, then press YES\non Gravity Chaos to flip gravity every 2.5 seconds!"},{
+    {
+        "secret_level_2",
+        2,
+        "Back on Track",
+        "Gravity Chaos",
+        "Unleashes Gravity Chaos: your gravity flips automatically\nevery 2.5 seconds with a warning flash and sound until 100%!",
+        "Step 1: Open Level 2 (Back on Track) in Normal Mode.\nStep 2: Right at the start, jump over the first spike\nand land directly on the second spike (1.70% to 2.00%).\nStep 3: Press YES on Gravity Chaos when your cube explodes!"
+    },
+    {
         "secret_level_10",
         10,
         "xStep",
-        "Time Secret (Warp Time)",
-        "Dynamically warps game speed and music tempo in rhythm:\n- Pad: +20% Speed | Orb (click): +10% Speed\n- Normal jump: -5% Speed | Gravity portal: -30% Speed",
-        "1. Play Level 10: xStep (or Secretstep).\n2. Skip the yellow orb around 8.50% - 8.70% and crash into the spike.\n3. After the cube explodes, press YES on Time Secret!"
+        "Time Secret",
+        "Warps game speed and music tempo in rhythm:\nPad: +20% Speed | Orb click: +10% Speed\nNormal jump: -5% Speed | Gravity portal: -30% Speed",
+        "Step 1: Open Level 10 (xStep or Secretstep).\nStep 2: In the ball section, hit the two yellow pads\nand skip the yellow orb (between 13.25% and 13.55%).\nStep 3: Let your ball explode and press YES on Time Secret!"
     },
     {
         "secret_level_22",
         22,
         "Dash",
         "Ultimate Crash",
-        "Smoothly stops the camera on the final section, shrinks the entire screen down to a black dot, and cleanly exits the level!",
-        "1. Play Level 22: Dash (or Secret Dash).\n2. Reach the very end of the level.\n3. Press YES on the Ultimate Crash popup!"
+        "Smoothly stops the camera on the final section, shrinks\nthe entire screen to a dot, and cleanly exits the level!",
+        "Step 1: Open Level 22 (Dash or Secret Dash).\nStep 2: Reach the very end of the level.\nStep 3: Press YES on the Ultimate Crash popup!"
     }
 };
 
@@ -63,12 +70,12 @@ static int getSecretLevelIndex(GJGameLevel* lvl) {
     }
     std::string name = lvl->m_levelName;
     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-    if (name.find("madness") != std::string::npos || (lvl->m_levelID == 0 && lvl->m_songID == 0)) return 1; if (name.find("track") != std::string::npos || lvl->m_songID == 1) return 2;
-    if (name.find("step") != std::string::npos || lvl->m_songID == 9) return 10;
-    if (name.find("dash") != std::string::npos || lvl->m_songID == 21) return 22;
+    if (name.find("madness") != std::string::npos) return 1;
+    if (name.find("track") != std::string::npos) return 2;
+    if (name.find("step") != std::string::npos) return 10;
+    if (name.find("dash") != std::string::npos) return 22;
     return 0;
 }
-
 static void applySpeedAndPitch(PlayLayer* pl, float mult) {
     if (!pl) return;
     pl->m_gameState.m_timeWarp = mult;
@@ -110,7 +117,6 @@ static void spawnXstepIntroBanner(PlayLayer* pl) {
     for (int i = 0; i < 4; ++i) {
         float cx = 60.0f + i * 110.0f;
         CCNode* iconNode = nullptr;
-
         if (i == 0) {
             auto ring = CCSprite::createWithSpriteFrameName("portal_04_front_001.png");
             auto back = CCSprite::createWithSpriteFrameName("portal_04_back_001.png");
@@ -133,12 +139,10 @@ static void spawnXstepIntroBanner(PlayLayer* pl) {
             jumpLbl->setScale(0.32f);
             iconNode = jumpLbl;
         }
-
         if (iconNode) {
             iconNode->setPosition({ cx, 56.0f });
             container->addChild(iconNode);
         }
-
         auto valLbl = CCLabelBMFont::create(values[i], "goldFont.fnt");
         valLbl->setScale(0.42f);
         valLbl->setColor(colors[i]);
@@ -155,6 +159,7 @@ static void spawnXstepIntroBanner(PlayLayer* pl) {
         nullptr
     ));
 }
+
 class SecretDetailPopup : public FLAlertLayer {
 protected:
     bool init(int idx) {
@@ -176,7 +181,7 @@ protected:
         headerLbl->setScale(0.78f);
         m_mainLayer->addChild(headerLbl);
 
-        auto subLbl = CCLabelBMFont::create(unlocked ? s.secretTitle : "??? (Locked Secret)", "bigFont.fnt");
+        auto subLbl = CCLabelBMFont::create(unlocked ? s.secretTitle : "Locked Secret", "bigFont.fnt");
         subLbl->setPosition({ win.width * 0.5f, win.height * 0.5f + boxH * 0.5f - 45.0f });
         subLbl->setScale(0.46f);
         subLbl->setColor(unlocked ? ccColor3B{ 120, 255, 140 } : ccColor3B{ 255, 210, 90 });
@@ -193,15 +198,14 @@ protected:
         m_mainLayer->addChild(innerBox);
 
         std::string fullText = fmt::format(
-            "STATUS: {}\nWHAT IT IS:\n{}\nHOW TO FIND IT:\n{}",
+            "STATUS: {}\n\nWHAT IT IS:\n{}\n\nUSER MANUAL (HOW TO FIND IT):\n{}",
             unlocked ? "DISCOVERED!" : "NOT DISCOVERED YET",
-            unlocked ? s.whatItIs : "??? (Discover this secret in-game to unlock its full description!)",
+            unlocked ? s.whatItIs : "Discover this secret in-game to unlock its full description!",
             s.howToFind
         );
 
         auto textLbl = CCLabelBMFont::create(fullText.c_str(), "chatFont.fnt");
-        textLbl->setScale(0.56f);
-        textLbl->setWidth((innerW - 36.0f) / 0.56f);
+        textLbl->setScale(0.52f);
         textLbl->setAlignment(kCCTextAlignmentLeft);
         textLbl->setAnchorPoint({ 0.0f, 1.0f });
         textLbl->setPosition({ win.width * 0.5f - innerW * 0.5f + 14.0f, win.height * 0.5f - 18.0f + innerH * 0.5f - 10.0f });
@@ -227,7 +231,6 @@ public:
         return nullptr;
     }
 };
-
 class SecretsCodexPopup : public FLAlertLayer {
 protected:
     bool init() {
@@ -269,7 +272,7 @@ protected:
                 "Level {}: {} - {} [{}]",
                 s.levelNum,
                 s.levelName,
-                unlocked ? s.secretTitle : "???",
+                unlocked ? s.secretTitle : "Locked",
                 unlocked ? "FOUND" : "LOCKED"
             );
             auto spr = ButtonSprite::create(btnText.c_str(), static_cast<int>(listW - 44.0f), true, "goldFont.fnt", unlocked ? "GJ_button_01.png" : "GJ_button_04.png", 26.0f, 0.48f);
@@ -288,7 +291,7 @@ protected:
         closeBtn->setPosition({ win.width * 0.5f - boxW * 0.5f + 8.0f, win.height * 0.5f + boxH * 0.5f - 8.0f });
         menu->addChild(closeBtn);
 
-        auto tip = CCLabelBMFont::create("Click any level to read full details & how to find its secret!", "chatFont.fnt");
+        auto tip = CCLabelBMFont::create("Click any level to read the full user manual!", "chatFont.fnt");
         tip->setPosition({ win.width * 0.5f, win.height * 0.5f - boxH * 0.5f + 16.0f });
         tip->setScale(0.76f);
         m_mainLayer->addChild(tip);
@@ -327,12 +330,18 @@ class $modify(SecretPauseHook, PauseLayer) {
         if (auto popup = SecretsCodexPopup::create()) popup->show();
     }
 };
-static bool g_botPromptOpen = false; static bool g_botActive = false; static float g_botDeathDelay = 0.0f; static float g_botFlipTimer = 2.5f; class BotPopupHandler : public FLAlertLayerProtocol { public: void FLAlert_Clicked(FLAlertLayer*, bool btn2) override { g_botPromptOpen = false; auto pl = PlayLayer::get(); if (!pl) return; pl->resetLevel(); if (!btn2) return; unlockSecret("secret_level_2"); g_botActive = true; g_botFlipTimer = 2.5f; } }; static BotPopupHandler g_botPopupHandler; static bool g_orbActivated = false;
+
+static bool g_orbActivated = false;
 static bool g_reversePromptOpen = false;
 static bool g_reverseActive = false;
 static float g_reverseIntroTimer = 0.0f;
 static float g_reverseProgress = 100.0f;
 static float g_reverseStartX = 0.0f;
+
+static bool g_botTriggeredThisDeath = false;
+static bool g_botPromptOpen = false;
+static bool g_botActive = false;
+static float g_botFlipTimer = 2.5f;
 
 static bool g_xstepPromptOpen = false;
 static bool g_xstepActive = false;
@@ -345,64 +354,50 @@ static float g_xstepCooldown = 0.0f;
 static bool g_dashPromptOpen = false;
 static bool g_dashEnding = false;
 static float g_dashTimer = 0.0f;
-static float g_dashCamStartX = 0.0f;
-
 class ReversePopupHandler : public FLAlertLayerProtocol {
 public:
     void FLAlert_Clicked(FLAlertLayer*, bool btn2) override {
         g_reversePromptOpen = false;
         auto pl = PlayLayer::get();
         if (!pl) return;
-        if (!btn2) {
-            pl->m_player1->m_isLocked = false;
-            pl->resetLevel();
-            return;
-        }
+        if (!btn2) { pl->m_player1->m_isLocked = false; pl->resetLevel(); return; }
         unlockSecret("secret_level_1");
         g_reverseActive = true;
         g_reverseIntroTimer = 0.95f;
         g_reverseProgress = 100.0f;
         g_reverseStartX = pl->m_player1->getPositionX();
-
         auto fmod = FMODAudioEngine::sharedEngine();
         fmod->stopAllMusic(true);
         std::string revSfx = Mod::get()->getResourcesDir().string() + "/endStart_reverse.ogg";
         fmod->playEffect(revSfx.c_str());
-
-        auto win = CCDirector::sharedDirector()->getWinSize();
         ccBezierConfig bez;
         bez.controlPoint_1 = ccp(g_reverseStartX + 70.0f, pl->m_player1->getPositionY() + 65.0f);
         bez.controlPoint_2 = ccp(g_reverseStartX + 145.0f, 195.0f);
         bez.endPosition = ccp(g_reverseStartX + 165.0f, 185.0f);
-
         pl->m_player1->runAction(CCSequence::create(
             CCBezierTo::create(0.45f, bez),
             CCMoveTo::create(0.45f, ccp(g_reverseStartX - 35.0f, 185.0f)),
             nullptr
         ));
-
-        for (int r = 0; r < 3; ++r) {
-            auto ring = CCSprite::createWithSpriteFrameName("ring_01_001.png");
-            if (ring) {
-                ring->setPosition({ win.width - 34.0f, win.height * 0.5f });
-                ring->setScale(0.2f);
-                ring->setOpacity(220);
-                pl->addChild(ring, 110);
-                ring->runAction(CCSequence::create(
-                    CCDelayTime::create(0.38f + r * 0.08f),
-                    CCSpawn::create(
-                        CCScaleTo::create(0.45f, 3.2f + r * 0.7f),
-                        CCFadeOut::create(0.45f),
-                        nullptr
-                    ),
-                    CCRemoveSelf::create(),
-                    nullptr
-                ));
-            }
-        }
     }
 };
 static ReversePopupHandler g_reversePopupHandler;
+
+class BotPopupHandler : public FLAlertLayerProtocol {
+public:
+    void FLAlert_Clicked(FLAlertLayer*, bool btn2) override {
+        g_botPromptOpen = false;
+        g_botTriggeredThisDeath = false;
+        auto pl = PlayLayer::get();
+        if (!pl) return;
+        pl->resetLevel();
+        if (!btn2) return;
+        unlockSecret("secret_level_2");
+        g_botActive = true;
+        g_botFlipTimer = 2.5f;
+    }
+};
+static BotPopupHandler g_botPopupHandler;
 
 class XstepPopupHandler : public FLAlertLayerProtocol {
 public:
@@ -412,13 +407,11 @@ public:
         if (!pl) return;
         pl->resetLevel();
         if (!btn2) return;
-
         unlockSecret("secret_level_10");
         g_xstepActive = true;
         g_xstepIntroTimer = 3.0f;
         g_xstepTargetSpeed = 1.0f;
         g_xstepCurrentSpeed = 1.0f;
-        g_xstepCooldown = 0.0f;
         applySpeedAndPitch(pl, 1.0f);
         FMODAudioEngine::sharedEngine()->pauseAllMusic(true);
         spawnXstepIntroBanner(pl);
@@ -432,16 +425,10 @@ public:
         g_dashPromptOpen = false;
         auto pl = PlayLayer::get();
         if (!pl) return;
-        if (!btn2) {
-            pl->m_player1->m_isLocked = false;
-            pl->onQuit();
-            return;
-        }
+        if (!btn2) { pl->m_player1->m_isLocked = false; pl->onQuit(); return; }
         unlockSecret("secret_level_22");
         g_dashEnding = true;
         g_dashTimer = 0.0f;
-        g_dashCamStartX = pl->m_gameState.m_cameraPosition.x;
-
         auto win = CCDirector::sharedDirector()->getWinSize();
         pl->ignoreAnchorPointForPosition(false);
         pl->setAnchorPoint({ 0.5f, 0.5f });
@@ -460,69 +447,55 @@ class $modify(SecretPlayerHook, PlayerObject) {
         auto pl = PlayLayer::get();
         if (!pl || this != pl->m_player1) return;
         int lvlIdx = getSecretLevelIndex(pl->m_level);
-
         if (lvlIdx == 1 && !g_orbActivated && !g_reversePromptOpen && !g_reverseActive) {
             if (this->getPositionX() > 24000.0f && this->getPositionY() > 210.0f) {
                 g_orbActivated = true;
                 g_reversePromptOpen = true;
                 this->m_isLocked = true;
                 FMODAudioEngine::sharedEngine()->pauseAllMusic(true);
-                auto alert = FLAlertLayer::create(
-                    &g_reversePopupHandler,
-                    "Reverse Secret",
-                    "Do you want to play in <cp>Reverse Mode</c>?",
-                    "No",
-                    "Yes"
-                );
-                alert->show();
+                FLAlertLayer::create(&g_reversePopupHandler, "Reverse Secret", "Do you want to play in Reverse Mode?", "No", "Yes")->show();
             }
         }
-
         if (lvlIdx == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
             g_xstepCooldown = 0.14f;
             g_xstepTargetSpeed = std::min(2.20f, g_xstepTargetSpeed + 0.10f);
         }
     }
-
     void bumpPlayer(float p0, int p1, bool p2, GameObject* obj) {
         PlayerObject::bumpPlayer(p0, p1, p2, obj);
         auto pl = PlayLayer::get();
-        if (!pl || this != pl->m_player1) return;
-        if (getSecretLevelIndex(pl->m_level) == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
+        if (pl && this == pl->m_player1 && getSecretLevelIndex(pl->m_level) == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
             g_xstepCooldown = 0.14f;
             g_xstepTargetSpeed = std::min(2.20f, g_xstepTargetSpeed + 0.20f);
         }
     }
-
     void pushButton(PlayerButton btn) {
         bool wasOnGround = this->m_isOnGround;
         PlayerObject::pushButton(btn);
         auto pl = PlayLayer::get();
-        if (!pl || this != pl->m_player1) return;
-        if (btn == PlayerButton::Jump && wasOnGround && getSecretLevelIndex(pl->m_level) == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
+        if (pl && this == pl->m_player1 && btn == PlayerButton::Jump && wasOnGround && getSecretLevelIndex(pl->m_level) == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
             g_xstepCooldown = 0.14f;
             g_xstepTargetSpeed = std::max(0.40f, g_xstepTargetSpeed - 0.05f);
         }
     }
-
     void flipGravity(bool flip, bool p1) {
         bool prev = this->m_isUpsideDown;
         PlayerObject::flipGravity(flip, p1);
         auto pl = PlayLayer::get();
-        if (!pl || this != pl->m_player1) return;
-        if (prev != flip && getSecretLevelIndex(pl->m_level) == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
+        if (pl && this == pl->m_player1 && prev != flip && getSecretLevelIndex(pl->m_level) == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
             g_xstepCooldown = 0.14f;
             g_xstepTargetSpeed = std::max(0.40f, g_xstepTargetSpeed - 0.30f);
         }
     }
 };
-
 class $modify(HiddenSecretsMod, PlayLayer) {
     void resetLevel() {
-        g_botPromptOpen = false; g_botDeathDelay = 0.0f; g_botFlipTimer = 2.5f; g_orbActivated = false;
+        g_orbActivated = false;
         g_reversePromptOpen = false;
         g_reverseActive = false;
         g_reverseIntroTimer = 0.0f;
+        if (!g_botPromptOpen) g_botTriggeredThisDeath = false;
+        g_botFlipTimer = 2.5f;
         g_xstepPromptOpen = false;
         g_xstepDeathDelay = 0.0f;
         g_xstepIntroTimer = 0.0f;
@@ -538,13 +511,11 @@ class $modify(HiddenSecretsMod, PlayLayer) {
     }
 
     void destroyPlayer(PlayerObject* player, GameObject* obj) {
-        if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 2 && !g_botActive && !g_botPromptOpen) { float pct = this->getCurrentPercent(); if (this->m_player1->getPositionX() >= 180.0f && this->m_player1->getPositionX() <= 300.0f) { g_botPromptOpen = true; g_botDeathDelay = 0.45f; PlayLayer::destroyPlayer(player, obj); return; } } if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 10 && !g_xstepActive && !g_xstepPromptOpen) {
+        if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 10 && !g_xstepActive && !g_xstepPromptOpen) {
             float pct = this->getCurrentPercent();
-            if (pct >= 8.40f && pct <= 8.85f) {
+            if (pct >= 13.25f && pct <= 13.55f) {
                 g_xstepPromptOpen = true;
                 g_xstepDeathDelay = 0.65f;
-                PlayLayer::destroyPlayer(player, obj);
-                return;
             }
         }
         PlayLayer::destroyPlayer(player, obj);
@@ -555,14 +526,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
             g_dashPromptOpen = true;
             this->m_player1->m_isLocked = true;
             FMODAudioEngine::sharedEngine()->stopAllMusic(true);
-            auto alert = FLAlertLayer::create(
-                &g_dashPopupHandler,
-                "Ultimate Crash",
-                "Do you want to trigger the <cr>Ultimate Crash</c>?",
-                "No",
-                "Yes"
-            );
-            alert->show();
+            FLAlertLayer::create(&g_dashPopupHandler, "Ultimate Crash", "Do you want to trigger the Ultimate Crash?", "No", "Yes")->show();
             return;
         }
         PlayLayer::levelComplete();
@@ -571,11 +535,33 @@ class $modify(HiddenSecretsMod, PlayLayer) {
     void update(float dt) {
         int lvlIdx = getSecretLevelIndex(this->m_level);
 
-        if (lvlIdx == 1 && (g_reversePromptOpen || g_reverseActive)) {
-            if (g_reversePromptOpen) {
-                this->m_player1->m_isLocked = true;
-                return;
+        if (lvlIdx == 2 && this->m_player1) {
+            if (g_botPromptOpen) return;
+            if (this->m_player1->m_isDead && !g_botActive && !g_botTriggeredThisDeath) {
+                float px = this->m_player1->getPositionX();
+                if (px >= 195.0f && px <= 330.0f) {
+                    g_botTriggeredThisDeath = true;
+                    g_botPromptOpen = true;
+                    FMODAudioEngine::sharedEngine()->stopAllMusic(true);
+                    FLAlertLayer::create(&g_botPopupHandler, "Gravity Chaos", "Do you want to unleash Gravity Chaos?", "No", "Yes")->show();
+                    return;
+                }
+            } else if (g_botActive && !this->m_player1->m_isDead) {
+                g_botFlipTimer -= dt;
+                if (g_botFlipTimer <= 0.0f) {
+                    g_botFlipTimer = 2.5f;
+                    bool nf = !this->m_player1->m_isUpsideDown;
+                    this->m_player1->flipGravity(nf, true);
+                    FMODAudioEngine::sharedEngine()->playEffect("playSound_01.ogg");
+                    auto fl = CCLayerColor::create(nf ? ccc4(0, 190, 255, 80) : ccc4(255, 110, 200, 80));
+                    this->addChild(fl, 115);
+                    fl->runAction(CCSequence::create(CCFadeOut::create(0.35f), CCRemoveSelf::create(), nullptr));
+                }
             }
+        }
+
+        if (lvlIdx == 1 && (g_reversePromptOpen || g_reverseActive)) {
+            if (g_reversePromptOpen) { this->m_player1->m_isLocked = true; return; }
             if (g_reverseIntroTimer > 0.0f) {
                 g_reverseIntroTimer -= dt;
                 if (g_reverseIntroTimer <= 0.0f) {
@@ -586,37 +572,23 @@ class $modify(HiddenSecretsMod, PlayLayer) {
             }
             float curX = this->m_player1->getPositionX() - (311.58f * dt);
             this->m_player1->setPositionX(curX);
-            float clampedY = std::clamp(this->m_player1->getPositionY(), 105.0f, 275.0f);
-            this->m_player1->setPositionY(clampedY);
+            this->m_player1->setPositionY(std::clamp(this->m_player1->getPositionY(), 105.0f, 275.0f));
             this->m_gameState.m_cameraPosition.x = std::max(0.0f, curX - 110.0f);
-
-            if (g_reverseStartX > 0.0f) {
+            if (g_reverseStartX > 0.0f && this->m_percentageLabel) {
                 g_reverseProgress = std::clamp((curX / g_reverseStartX) * 100.0f, 0.0f, 100.0f);
-                if (this->m_percentageLabel) {
-                    this->m_percentageLabel->setString(fmt::format("{:.2f}%", g_reverseProgress).c_str());
-                }
+                this->m_percentageLabel->setString(fmt::format("{:.2f}%", g_reverseProgress).c_str());
             }
-            if (curX <= 15.0f) {
-                g_reverseActive = false;
-                this->onQuit();
-            }
+            if (curX <= 15.0f) { g_reverseActive = false; this->onQuit(); }
             return;
         }
 
-        if (lvlIdx == 2) { if (g_botPromptOpen) { if (g_botDeathDelay > 0.0f) { g_botDeathDelay -= dt; if (g_botDeathDelay <= 0.0f) { FMODAudioEngine::sharedEngine()->stopAllMusic(true); FLAlertLayer::create(&g_botPopupHandler, "Gravity Chaos", "Do you want to unleash <cy>Gravity Chaos</c>?", "No", "Yes")->show(); } } return; } if (g_botActive && !this->m_player1->m_isDead) { g_botFlipTimer -= dt; if (g_botFlipTimer <= 0.0f) { g_botFlipTimer = 2.5f; bool nf = !this->m_player1->m_isUpsideDown; this->m_player1->flipGravity(nf, true); FMODAudioEngine::sharedEngine()->playEffect("playSound_01.ogg"); auto fl = CCLayerColor::create(nf ? ccc4(0, 190, 255, 75) : ccc4(255, 110, 200, 75)); this->addChild(fl, 115); fl->runAction(CCSequence::create(CCFadeOut::create(0.35f), CCRemoveSelf::create(), nullptr)); } } } if (lvlIdx == 10) {
+        if (lvlIdx == 10) {
             if (g_xstepPromptOpen) {
                 if (g_xstepDeathDelay > 0.0f) {
                     g_xstepDeathDelay -= dt;
                     if (g_xstepDeathDelay <= 0.0f) {
                         FMODAudioEngine::sharedEngine()->stopAllMusic(true);
-                        auto alert = FLAlertLayer::create(
-                            &g_xstepPopupHandler,
-                            "Time Secret",
-                            "Do you want to <cp>warp time</c>?",
-                            "No",
-                            "Yes"
-                        );
-                        alert->show();
+                        FLAlertLayer::create(&g_xstepPopupHandler, "Time Secret", "Do you want to warp time?", "No", "Yes")->show();
                     }
                 }
                 return;
@@ -625,34 +597,23 @@ class $modify(HiddenSecretsMod, PlayLayer) {
                 if (g_xstepIntroTimer > 0.0f) {
                     g_xstepIntroTimer -= dt;
                     this->m_player1->m_isLocked = true;
-                    if (g_xstepIntroTimer <= 0.0f) {
-                        this->m_player1->m_isLocked = false;
-                        FMODAudioEngine::sharedEngine()->resumeAllMusic();
-                    }
+                    if (g_xstepIntroTimer <= 0.0f) { this->m_player1->m_isLocked = false; FMODAudioEngine::sharedEngine()->resumeAllMusic(); }
                     return;
                 }
                 if (g_xstepCooldown > 0.0f) g_xstepCooldown -= dt;
-                float diff = g_xstepTargetSpeed - g_xstepCurrentSpeed;
-                g_xstepCurrentSpeed += diff * std::min(1.0f, dt * 2.2f);
+                g_xstepCurrentSpeed += (g_xstepTargetSpeed - g_xstepCurrentSpeed) * std::min(1.0f, dt * 2.2f);
                 applySpeedAndPitch(this, g_xstepCurrentSpeed);
             }
         }
 
         if (lvlIdx == 22) {
-            if (g_dashPromptOpen) {
-                this->m_player1->m_isLocked = true;
-                return;
-            }
+            if (g_dashPromptOpen) { this->m_player1->m_isLocked = true; return; }
             if (g_dashEnding) {
                 this->m_player1->m_isLocked = true;
                 g_dashTimer += dt;
                 float slowEase = std::min(1.0f, g_dashTimer / 1.3f);
-                float decel = 1.0f - (slowEase * slowEase);
-                this->m_gameState.m_cameraPosition.x += 280.0f * decel * dt;
-                if (g_dashTimer >= 2.75f) {
-                    g_dashEnding = false;
-                    this->onQuit();
-                }
+                this->m_gameState.m_cameraPosition.x += 280.0f * (1.0f - slowEase * slowEase) * dt;
+                if (g_dashTimer >= 2.75f) { g_dashEnding = false; this->onQuit(); }
                 return;
             }
         }
