@@ -327,7 +327,7 @@ class $modify(SecretPauseHook, PauseLayer) {
         if (auto popup = SecretsCodexPopup::create()) popup->show();
     }
 };
-static bool g_botPromptOpen = false; static bool g_botActive = false; static float g_botDeathDelay = 0.0f; static float g_botFlipTimer = 2.5f; class BotPopupHandler : public FLAlertLayerProtocol { public: void FLAlert_Clicked(FLAlertLayer*, bool btn2) override { g_botPromptOpen = false; auto pl = PlayLayer::get(); if (!pl) return; pl->resetLevel(); if (!btn2) return; unlockSecret("secret_level_2"); g_botActive = true; g_botFlipTimer = 2.5f; } }; static BotPopupHandler g_botPopupHandler; static bool g_botPromptOpen = false; g_botDeathDelay = 0.0f; g_botFlipTimer = 2.5f; g_orbActivated = false;
+static bool g_botPromptOpen = false; static bool g_botActive = false; static float g_botDeathDelay = 0.0f; static float g_botFlipTimer = 2.5f; class BotPopupHandler : public FLAlertLayerProtocol { public: void FLAlert_Clicked(FLAlertLayer*, bool btn2) override { g_botPromptOpen = false; auto pl = PlayLayer::get(); if (!pl) return; pl->resetLevel(); if (!btn2) return; unlockSecret("secret_level_2"); g_botActive = true; g_botFlipTimer = 2.5f; } }; static BotPopupHandler g_botPopupHandler; static bool g_orbActivated = false; g_orbActivated = false;
 static bool g_reversePromptOpen = false;
 static bool g_reverseActive = false;
 static float g_reverseIntroTimer = 0.0f;
