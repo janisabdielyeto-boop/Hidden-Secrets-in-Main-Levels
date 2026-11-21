@@ -1,74 +1,48 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/PauseLayer.hpp>
-#include <Geode/modify/EndLevelLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
-#include <Geode/modify/CCKeyboardDispatcher.hpp>
-#include <vector>
-#include <string>
+#include <Geode/modify/GJBaseGameLayer.hpp>
+#include <algorithm>
 #include <cmath>
+#include <string>
+#include <vector>
+
 using namespace geode::prelude;
 
-static bool g_orbActivated = false;
-static bool g_promptShown = false;
-static bool g_reverseModeActive = false;
-static bool g_reverseCompleted = false;
-static bool g_reverseOutroActive = false;
-static bool g_playerReallyDied = false;
-static float g_savedEndX = 26280.0f;
-static float g_introTimer = 0.0f;
-static bool g_musicStarted = false;
-
-static bool g_dashCrashArmed = false;
-static bool g_dashInWave = false;
-static bool g_dashCamFixed = false;
-static int g_dashLoopCount = 0;
-static CCPoint g_dashWaveStartPos = { 0.0f, 0.0f };
-static CCPoint g_dashFixedCamPos = { 0.0f, 0.0f };
-static unsigned int g_dashWaveMusicMS = 0;
-
-static bool g_xstepPromptOpen = false;
-static bool g_xstepWarpActive = false;
-static float g_xstepIntroTimer = 0.0f;
-static float g_xstepDeathDelay = 0.0f;
-static float g_xstepCooldown = 0.0f;
-static float g_xstepTargetAngle = 1.0f;
-static float g_xstepCurrentAngle = 1.0f;
-static bool g_xstepLastFlipped = false;
-static bool g_xstepWasOnGround = true;
-static bool g_xstepSkipNextJump = false;
-
-static EndLevelLayer* g_endLayer = nullptr;
-static Ref<CCNode> g_levelCompleteNode = nullptr;
-
-struct SecretEntry {
-    int levelNum;
+struct SecretDef {
     const char* key;
+    int levelNum;
     const char* levelName;
     const char* secretTitle;
     const char* whatItIs;
     const char* howToFind;
-    const char* iconSprite;
 };
 
-static const std::vector<SecretEntry> g_implementedSecrets = {
+static const std::vector<SecretDef> g_implementedSecrets = {
     {
-        1, "secret_1", "Stereo Madness", "Reverse Mode",
-        "Activates Reverse Mode at the end of Level 1: Stereo Madness!\n\nInstead of finishing the level normally, the end wall rewinds backwards and you fly the entire level in reverse from 100.00% down to 0.00% with reversed music and sound effects.",
-        "1. Play Level 1: Stereo Madness (or Secret Madness).\n2. Near the very end of the final ship section, fly high above the normal path (or hit the hidden Toggle Orb in Secret Madness) right before touching the end wall.\n3. When the 'Reverse Secret' prompt appears, click YES!",
-        ""
+        "secret_level_1",
+        1,
+        "Stereo Madness",
+        "Reverse Mode",
+        "Plays the end-wall reverse curve & ring shockwave, rewinds from 100.00% down to 0.00% in balanced Free Mode with reversed music!",
+        "1. Play Level 1: Stereo Madness (or Secret Madness).\n2. Fly to the very top at the end of the final ship section.\n3. Click/tap the hidden toggle orb to open Reverse Secret and press YES!"
     },
     {
-        10, "secret_10", "xStep", "Time Secret (Warp Time)",
-        "Warps reality in Level 10: xStep!\n\nEvery action tilts the entire camera angle dynamically:\n- Every normal jump: -5% degrees\n- Every pad: +20% degrees\n- Every orb: +10% degrees\n- Every gravity portal: -30% degrees",
-        "1. Play Level 10: xStep (or Secretstep).\n2. At exactly 4.93%, intentionally miss the yellow orb and crash into the spike beneath the hanging pillar.\n3. When 'Mysterious Secret' pops up, click YES and watch the 3-second intro before the cube and music start!",
-        ""
+        "secret_level_10",
+        10,
+        "xStep",
+        "Time Secret (Warp Time)",
+        "Dynamically warps game speed and music tempo in rhythm:\n- Pad: +20% Speed | Orb (click): +10% Speed\n- Normal jump: -5% Speed | Gravity portal: -30% Speed",
+        "1. Play Level 10: xStep (or Secretstep).\n2. Skip the yellow orb around 8.50% - 8.70% and crash into the spike.\n3. After the cube explodes, press YES on Time Secret!"
     },
     {
-        22, "secret_22", "Dash", "Ultimate Crash",
-        "Triggers the Ultimate Crash loop in Level 22: Dash!\n\nLocks the camera on the final Wave section and loops it 25 times in a row. On every loop, both the game speed and music pitch increase until the game crashes on loop 25!",
-        "1. Play Level 22: Dash (or Secret Dash).\n2. Around 82%, right before entering the final big Wave portal, jump high into the hidden secret zone beneath the ULTIMATE CRASH sign.\n3. Enter the big Wave portal and survive the 25 accelerating loops!",
-        ""
+        "secret_level_22",
+        22,
+        "Dash",
+        "Ultimate Crash",
+        "Smoothly stops the camera on the final section, shrinks the entire screen down to a black dot, and cleanly exits the level!",
+        "1. Play Level 22: Dash (or Secret Dash).\n2. Reach the very end of the level.\n3. Press YES on the Ultimate Crash popup!"
     }
 };
 
@@ -77,19 +51,110 @@ static bool isSecretUnlocked(const char* key) {
 }
 
 static void unlockSecret(const char* key) {
-    if (!isSecretUnlocked(key)) {
+    if (!Mod::get()->getSavedValue<bool>(key, false)) {
         Mod::get()->setSavedValue<bool>(key, true);
     }
 }
 
-static int getUnlockedSecretsCount() {
-    int count = 0;
-    for (const auto& s : g_implementedSecrets) {
-        if (isSecretUnlocked(s.key)) count++;
+static int getSecretLevelIndex(GJGameLevel* lvl) {
+    if (!lvl) return 0;
+    if (lvl->m_levelID == 1 || lvl->m_levelID == 10 || lvl->m_levelID == 22) {
+        return lvl->m_levelID;
     }
-    return count;
+    std::string name = lvl->m_levelName;
+    std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+    if (name.find("madness") != std::string::npos || (lvl->m_levelID == 0 && lvl->m_songID == 0)) return 1;
+    if (name.find("step") != std::string::npos || lvl->m_songID == 9) return 10;
+    if (name.find("dash") != std::string::npos || lvl->m_songID == 21) return 22;
+    return 0;
 }
 
+static void applySpeedAndPitch(PlayLayer* pl, float mult) {
+    if (!pl) return;
+    pl->m_gameState.m_timeWarp = mult;
+    if (auto fmod = FMODAudioEngine::sharedEngine()) {
+        if (fmod->m_backgroundMusicChannel) {
+            fmod->m_backgroundMusicChannel->setPitch(mult);
+        }
+    }
+}
+
+static void spawnXstepIntroBanner(PlayLayer* pl) {
+    if (!pl) return;
+    if (auto old = pl->getChildByTag(9910)) old->removeFromParent();
+
+    auto win = CCDirector::sharedDirector()->getWinSize();
+    auto container = CCNode::create();
+    container->setTag(9910);
+    container->ignoreAnchorPointForPosition(false);
+    container->setAnchorPoint({ 0.5f, 0.5f });
+    container->setContentSize({ 450.0f, 84.0f });
+    container->setPosition({ win.width * 0.5f, win.height - 62.0f });
+    pl->addChild(container, 120);
+
+    auto bg = extension::CCScale9Sprite::create("square02b_001.png");
+    bg->setColor({ 0, 0, 0 });
+    bg->setOpacity(175);
+    bg->setContentSize({ 450.0f, 84.0f });
+    bg->setPosition({ 225.0f, 42.0f });
+    container->addChild(bg);
+
+    const char* values[] = { "-30% Speed", "+20% Speed", "+10% Speed", "-5% Speed" };
+    ccColor3B colors[] = {
+        { 100, 200, 255 },
+        { 120, 255, 140 },
+        { 255, 230, 90 },
+        { 255, 140, 140 }
+    };
+
+    for (int i = 0; i < 4; ++i) {
+        float cx = 60.0f + i * 110.0f;
+        CCNode* iconNode = nullptr;
+
+        if (i == 0) {
+            auto ring = CCSprite::createWithSpriteFrameName("portal_04_front_001.png");
+            auto back = CCSprite::createWithSpriteFrameName("portal_04_back_001.png");
+            if (!ring) ring = CCSprite::createWithSpriteFrameName("portal_03_front_001.png");
+            if (ring) {
+                auto wrap = CCNode::create();
+                if (back) { back->setScale(0.45f); wrap->addChild(back, 0); }
+                ring->setScale(0.45f);
+                wrap->addChild(ring, 1);
+                iconNode = wrap;
+            }
+        } else if (i == 1) {
+            auto spr = CCSprite::createWithSpriteFrameName("bump_01_001.png");
+            if (spr) { spr->setScale(0.65f); iconNode = spr; }
+        } else if (i == 2) {
+            auto spr = CCSprite::createWithSpriteFrameName("ring_01_001.png");
+            if (spr) { spr->setScale(0.55f); iconNode = spr; }
+        } else {
+            auto jumpLbl = CCLabelBMFont::create("Every jump", "bigFont.fnt");
+            jumpLbl->setScale(0.32f);
+            iconNode = jumpLbl;
+        }
+
+        if (iconNode) {
+            iconNode->setPosition({ cx, 56.0f });
+            container->addChild(iconNode);
+        }
+
+        auto valLbl = CCLabelBMFont::create(values[i], "goldFont.fnt");
+        valLbl->setScale(0.42f);
+        valLbl->setColor(colors[i]);
+        valLbl->setPosition({ cx, 24.0f });
+        container->addChild(valLbl);
+    }
+
+    container->setScale(0.0f);
+    container->runAction(CCSequence::create(
+        CCEaseBackOut::create(CCScaleTo::create(0.25f, 1.0f)),
+        CCDelayTime::create(2.43f),
+        CCEaseBackIn::create(CCScaleTo::create(0.32f, 0.0f)),
+        CCRemoveSelf::create(),
+        nullptr
+    ));
+}
 class SecretDetailPopup : public FLAlertLayer {
 protected:
     bool init(int idx) {
@@ -127,22 +192,19 @@ protected:
         innerBox->setPosition({ win.width * 0.5f, win.height * 0.5f - 18.0f });
         m_mainLayer->addChild(innerBox);
 
-        float scrollW = innerW - 22.0f;
-        float scrollH = innerH - 12.0f;
-
         std::string fullText = fmt::format(
-            "STATUS: {}\n\n--- WHAT IT IS ---\n{}\n\n--- HOW TO FIND IT ---\n{}",
+            "STATUS: {}\n--- WHAT IT IS ---\n{}\n--- HOW TO FIND IT ---\n{}",
             unlocked ? "DISCOVERED!" : "NOT DISCOVERED YET",
             unlocked ? s.whatItIs : "??? (Discover this secret in-game to unlock its full description!)",
             s.howToFind
         );
 
         auto textLbl = CCLabelBMFont::create(fullText.c_str(), "chatFont.fnt");
-        textLbl->setScale(0.78f);
-        textLbl->setWidth((innerW - 24.0f) / 0.78f);
+        textLbl->setScale(0.56f);
+        textLbl->setWidth((innerW - 36.0f) / 0.56f);
         textLbl->setAlignment(kCCTextAlignmentLeft);
         textLbl->setAnchorPoint({ 0.0f, 1.0f });
-        textLbl->setPosition({ win.width * 0.5f - innerW * 0.5f + 12.0f, win.height * 0.5f - 18.0f + innerH * 0.5f - 10.0f });
+        textLbl->setPosition({ win.width * 0.5f - innerW * 0.5f + 14.0f, win.height * 0.5f - 18.0f + innerH * 0.5f - 10.0f });
         m_mainLayer->addChild(textLbl);
 
         auto menu = CCMenu::create();
@@ -156,16 +218,11 @@ protected:
         return true;
     }
 
-    void onClose(CCObject*) {
-        this->keyBackClicked();
-    }
+    void onClose(CCObject*) { this->keyBackClicked(); }
 public:
     static SecretDetailPopup* create(int idx) {
         auto ret = new SecretDetailPopup();
-        if (ret && ret->init(idx)) {
-            ret->autorelease();
-            return ret;
-        }
+        if (ret && ret->init(idx)) { ret->autorelease(); return ret; }
         CC_SAFE_DELETE(ret);
         return nullptr;
     }
@@ -175,7 +232,6 @@ class SecretsCodexPopup : public FLAlertLayer {
 protected:
     bool init() {
         if (!FLAlertLayer::init(180)) return false;
-        int found = getUnlockedSecretsCount();
         int total = static_cast<int>(g_implementedSecrets.size());
         auto win = CCDirector::sharedDirector()->getWinSize();
 
@@ -205,16 +261,24 @@ protected:
         auto listMenu = CCMenu::create();
         listMenu->setPosition({ win.width * 0.5f, win.height * 0.5f - 4.0f });
         m_mainLayer->addChild(listMenu);
+
         for (int i = 0; i < total; ++i) {
             const auto& s = g_implementedSecrets[i];
             bool unlocked = isSecretUnlocked(s.key);
-            std::string btnText = fmt::format("Level {}: {} - {} [{}]", s.levelNum, s.levelName, unlocked ? s.secretTitle : "???", unlocked ? "FOUND" : "LOCKED");
+            std::string btnText = fmt::format(
+                "Level {}: {} - {} [{}]",
+                s.levelNum,
+                s.levelName,
+                unlocked ? s.secretTitle : "???",
+                unlocked ? "FOUND" : "LOCKED"
+            );
             auto spr = ButtonSprite::create(btnText.c_str(), static_cast<int>(listW - 44.0f), true, "goldFont.fnt", unlocked ? "GJ_button_01.png" : "GJ_button_04.png", 26.0f, 0.48f);
             auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(SecretsCodexPopup::onSelectSecret));
             btn->setTag(i);
             btn->setPosition({ 0.0f, (listH * 0.5f) - 26.0f - (i * 34.0f) });
             listMenu->addChild(btn);
         }
+
         auto menu = CCMenu::create();
         menu->setPosition({ 0.0f, 0.0f });
         m_mainLayer->addChild(menu);
@@ -231,228 +295,19 @@ protected:
         return true;
     }
 
-    void onClose(CCObject*) {
-        this->keyBackClicked();
-    }
-
+    void onClose(CCObject*) { this->keyBackClicked(); }
     void onSelectSecret(CCObject* sender) {
-        if (auto popup = SecretDetailPopup::create(sender->getTag())) {
-            popup->show();
-        }
+        if (auto popup = SecretDetailPopup::create(sender->getTag())) popup->show();
     }
 public:
     static SecretsCodexPopup* create() {
         auto ret = new SecretsCodexPopup();
-        if (ret && ret->init()) {
-            ret->autorelease();
-            return ret;
-        }
+        if (ret && ret->init()) { ret->autorelease(); return ret; }
         CC_SAFE_DELETE(ret);
         return nullptr;
     }
 };
-static int getSecretLevelIndex(GJGameLevel* lvl) {
-    if (!lvl) return 0;
-    static const std::vector<std::string> secretNames = {
-        "Secret Madness", "Secret on Track", "Secret Polargiest",
-        "Secret Out", "Secret after Secret", "Secret Let Go",
-        "Secret Jumper", "Secret Machine", "Secret Cycles",
-        "Secretstep", "Secret Clutterfunk", "Secret of Everything",
-        "Secrets Adventures", "Secret Clubstep", "Secretdynamics",
-        "Secret Force", "Secret Processing", "Secret of Everything 2",
-        "Secret Dominator", "Secretlocked", "Secret Fingerdash",
-        "Secret Dash"
-    };
-    std::string name(lvl->m_levelName);
-    for (size_t i = 0; i < secretNames.size(); ++i) {
-        if (name == secretNames[i]) return static_cast<int>(i + 1);
-    }
-    return 0;
-}
 
-static bool isSecretMadnessLevel(GJGameLevel* lvl) {
-    return lvl && (lvl->m_levelID == 1 || getSecretLevelIndex(lvl) == 1 || (lvl->m_levelID == 0 && (lvl->m_songID == 0 || std::string(lvl->m_levelName).find("Madness") != std::string::npos)));
-}
-
-static bool isSecretStepLevel(GJGameLevel* lvl) {
-    return lvl && (lvl->m_levelID == 10 || getSecretLevelIndex(lvl) == 10 || std::string(lvl->m_levelName).find("step") != std::string::npos || std::string(lvl->m_levelName).find("Step") != std::string::npos || lvl->m_songID == 9);
-}
-
-static bool isSecretDashLevel(GJGameLevel* lvl) {
-    return lvl && (lvl->m_levelID == 22 || getSecretLevelIndex(lvl) == 22 || std::string(lvl->m_levelName).find("Dash") != std::string::npos || lvl->m_songID == 22);
-}
-
-static void applyDashSpeedAndPitch(PlayLayer* pl, float speed) {
-    if (!pl) return;
-    pl->m_gameState.m_timeWarp = speed;
-    auto* fmod = FMODAudioEngine::sharedEngine();
-    if (fmod && fmod->m_backgroundMusicChannel) {
-        fmod->m_backgroundMusicChannel->setPitch(speed);
-    }
-}
-
-static void showXstepRulesBanner(PlayLayer* pl) {
-    if (!pl) return;
-    auto win = CCDirector::sharedDirector()->getWinSize();
-    auto container = CCNode::create();
-    container->setPosition({ win.width * 0.5f, win.height * 0.52f });
-    container->setScale(0.0f);
-    container->setZOrder(250);
-
-    const char* sprites[] = {
-        "portal_01_front_001.png",
-        "bump_03_001.png",
-        "ring_01_001.png",
-        nullptr
-    };
-    const char* values[] = { "-30% Speed", "+20% Speed", "+10% Speed", "-5% Speed" };
-    float offsetsX[] = { -150.0f, -50.0f, 50.0f, 150.0f };
-
-    for (int i = 0; i < 4; ++i) {
-        if (sprites[i]) {
-            auto spr = CCSprite::createWithSpriteFrameName(sprites[i]);
-            if (spr) {
-                spr->setPosition({ offsetsX[i], 18.0f });
-                spr->setScale(i == 0 ? 0.65f : 0.85f);
-                container->addChild(spr);
-            }
-        } else {
-            auto titleLbl = CCLabelBMFont::create("Every jump", "goldFont.fnt");
-            titleLbl->setPosition({ offsetsX[i], 18.0f });
-            titleLbl->setScale(0.55f);
-            container->addChild(titleLbl);
-        }
-        auto valLbl = CCLabelBMFont::create(values[i], "bigFont.fnt");
-        valLbl->setPosition({ offsetsX[i], -24.0f });
-        valLbl->setScale(0.42f);
-        container->addChild(valLbl);
-    }
-
-    pl->addChild(container);
-    container->runAction(CCSequence::create(
-        CCEaseBackOut::create(CCScaleTo::create(0.35f, 1.0f)),
-        CCDelayTime::create(3.0f),
-        CCEaseIn::create(CCMoveBy::create(0.45f, { 0.0f, -260.0f }), 2.0f),
-        CCRemoveSelf::create(),
-        nullptr
-    ));
-}
-
-class XstepPromptPopup : public FLAlertLayerProtocol {
-public:
-    void FLAlert_Clicked(FLAlertLayer* layer, bool btn2) override {
-        if (layer) {
-            layer->setVisible(false);
-            layer->removeFromParentAndCleanup(true);
-        }
-        g_xstepPromptOpen = false;
-        auto* pl = PlayLayer::get();
-        if (!pl) return;
-
-        if (!btn2) {
-            g_xstepWarpActive = false;
-            pl->resetLevel();
-        } else {
-            unlockSecret("secret_10");
-            g_xstepWarpActive = true;
-            g_xstepTargetAngle = 1.0f;
-            g_xstepCurrentAngle = 1.0f;
-            g_xstepIntroTimer = 3.35f;
-            pl->resetLevel();
-            FMODAudioEngine::sharedEngine()->stopAllMusic(true);
-            if (pl->m_player1) {
-                pl->m_player1->m_isLocked = true;
-                g_xstepLastFlipped = pl->m_player1->m_isUpsideDown;
-            }
-            showXstepRulesBanner(pl);
-        }
-    }
-};
-
-static XstepPromptPopup g_xstepPopupHandler;
-
-class ReversePromptPopup : public FLAlertLayerProtocol {
-public:
-    void FLAlert_Clicked(FLAlertLayer* layer, bool btn2) override {
-        if (layer) {
-            layer->setVisible(false);
-            layer->removeFromParentAndCleanup(true);
-        }
-        auto* pl = PlayLayer::get();
-        if (!pl) return;
-
-        if (!btn2) {
-            g_orbActivated = false;
-            if (g_levelCompleteNode) {
-                g_levelCompleteNode->resumeSchedulerAndActions();
-                g_levelCompleteNode = nullptr;
-            }
-            if (g_endLayer) {
-                g_endLayer->setVisible(true);
-                g_endLayer->setPositionY(0.0f);
-            }
-        } else {
-            unlockSecret("secret_1");
-            g_orbActivated = false;
-            g_reverseModeActive = true;
-            g_reverseCompleted = false;
-            g_reverseOutroActive = false;
-            g_playerReallyDied = false;
-            g_introTimer = 1.25f;
-            g_musicStarted = false;
-
-            if (g_endLayer) {
-                g_endLayer->removeFromParentAndCleanup(true);
-                g_endLayer = nullptr;
-            }
-            pl->stopAllActions();
-            pl->m_hasCompletedLevel = false;
-            pl->spawnGroup(2, false, 0.0, {}, -1, -1);
-
-            if (g_levelCompleteNode) {
-                g_levelCompleteNode->resumeSchedulerAndActions();
-                g_levelCompleteNode->stopAllActions();
-                g_levelCompleteNode->runAction(CCSequence::create(
-                    CCScaleTo::create(0.12f, 1.25f),
-                    CCScaleTo::create(0.28f, 0.0f),
-                    CCRemoveSelf::create(),
-                    nullptr
-                ));
-                g_levelCompleteNode = nullptr;
-            }
-
-            if (pl->m_endPortal) {
-                pl->m_endPortal->stopAllActions();
-                pl->m_endPortal->setVisible(true);
-                pl->m_endPortal->setPosition(pl->m_endPosition);
-                pl->m_endPortal->updateEndPos(true);
-                pl->m_endPortal->runAction(CCSequence::create(
-                    CCDelayTime::create(0.05f),
-                    CCMoveBy::create(0.85f, { 280.0f, 0.0f }),
-                    CCHide::create(),
-                    nullptr
-                ));
-            }
-
-            auto* p1 = pl->m_player1;
-            if (p1) {
-                p1->m_isLocked = true;
-                p1->m_isDead = false;
-                p1->setVisible(false);
-                p1->setOpacity(255);
-                p1->setScale(1.0f);
-                p1->setRotation(-180.0f);
-                p1->setPosition({ g_savedEndX + 340.0f, 195.0f });
-                p1->reversePlayer(nullptr);
-            }
-
-            FMODAudioEngine::sharedEngine()->stopAllMusic(true);
-            FMODAudioEngine::sharedEngine()->playEffect("endStart_reverse.ogg"_spr);
-        }
-    }
-};
-
-static ReversePromptPopup g_reversePopupHandler;
 class $modify(SecretPauseHook, PauseLayer) {
     void customSetup() {
         PauseLayer::customSetup();
@@ -469,416 +324,339 @@ class $modify(SecretPauseHook, PauseLayer) {
     }
 
     void onOpenCodex(CCObject*) {
-        if (auto popup = SecretsCodexPopup::create()) {
-            popup->show();
+        if (auto popup = SecretsCodexPopup::create()) popup->show();
+    }
+};
+static bool g_orbActivated = false;
+static bool g_reversePromptOpen = false;
+static bool g_reverseActive = false;
+static float g_reverseIntroTimer = 0.0f;
+static float g_reverseProgress = 100.0f;
+static float g_reverseStartX = 0.0f;
+
+static bool g_xstepPromptOpen = false;
+static bool g_xstepActive = false;
+static float g_xstepDeathDelay = 0.0f;
+static float g_xstepIntroTimer = 0.0f;
+static float g_xstepTargetSpeed = 1.0f;
+static float g_xstepCurrentSpeed = 1.0f;
+static float g_xstepCooldown = 0.0f;
+
+static bool g_dashPromptOpen = false;
+static bool g_dashEnding = false;
+static float g_dashTimer = 0.0f;
+static float g_dashCamStartX = 0.0f;
+
+class ReversePopupHandler : public FLAlertLayerProtocol {
+public:
+    void FLAlert_Clicked(FLAlertLayer*, bool btn2) override {
+        g_reversePromptOpen = false;
+        auto pl = PlayLayer::get();
+        if (!pl) return;
+        if (!btn2) {
+            pl->m_player1->m_isLocked = false;
+            pl->resetLevel();
+            return;
+        }
+        unlockSecret("secret_level_1");
+        g_reverseActive = true;
+        g_reverseIntroTimer = 0.95f;
+        g_reverseProgress = 100.0f;
+        g_reverseStartX = pl->m_player1->getPositionX();
+
+        auto fmod = FMODAudioEngine::sharedEngine();
+        fmod->stopAllMusic(true);
+        std::string revSfx = Mod::get()->getResourcesDir().string() + "/endStart_reverse.ogg";
+        fmod->playEffect(revSfx.c_str());
+
+        auto win = CCDirector::sharedDirector()->getWinSize();
+        ccBezierConfig bez;
+        bez.controlPoint_1 = ccp(g_reverseStartX + 70.0f, pl->m_player1->getPositionY() + 65.0f);
+        bez.controlPoint_2 = ccp(g_reverseStartX + 145.0f, 195.0f);
+        bez.endPosition = ccp(g_reverseStartX + 165.0f, 185.0f);
+
+        pl->m_player1->runAction(CCSequence::create(
+            CCBezierTo::create(0.45f, bez),
+            CCMoveTo::create(0.45f, ccp(g_reverseStartX - 35.0f, 185.0f)),
+            nullptr
+        ));
+
+        for (int r = 0; r < 3; ++r) {
+            auto ring = CCSprite::createWithSpriteFrameName("ring_01_001.png");
+            if (ring) {
+                ring->setPosition({ win.width - 34.0f, win.height * 0.5f });
+                ring->setScale(0.2f);
+                ring->setOpacity(220);
+                pl->addChild(ring, 110);
+                ring->runAction(CCSequence::create(
+                    CCDelayTime::create(0.38f + r * 0.08f),
+                    CCSpawn::create(
+                        CCScaleTo::create(0.45f, 3.2f + r * 0.7f),
+                        CCFadeOut::create(0.45f),
+                        nullptr
+                    ),
+                    CCRemoveSelf::create(),
+                    nullptr
+                ));
+            }
         }
     }
 };
-class $modify(HiddenSecretsMod, PlayLayer) {
-    struct Fields {
-        bool m_waitingPrompt = false;
-        float m_endTimer = 0.0f;
-        float m_camStopTimer = 0.0f;
-    };
+static ReversePopupHandler g_reversePopupHandler;
 
-    void pauseGame(bool p0) {
-        if (g_reverseModeActive) this->m_hasCompletedLevel = false;
-        PlayLayer::pauseGame(p0);
-    }
-
-    void onQuit() {
-        g_orbActivated = false;
-        g_promptShown = false;
-        g_reverseModeActive = false;
-        g_reverseCompleted = false;
-        g_reverseOutroActive = false;
-        g_playerReallyDied = false;
-        g_introTimer = 0.0f;
-        g_musicStarted = false;
-        g_dashCrashArmed = false;
-        g_dashInWave = false;
-        g_dashCamFixed = false;
-        g_dashLoopCount = 0;
+class XstepPopupHandler : public FLAlertLayerProtocol {
+public:
+    void FLAlert_Clicked(FLAlertLayer*, bool btn2) override {
         g_xstepPromptOpen = false;
-        g_xstepWarpActive = false;
-        g_xstepIntroTimer = 0.0f;
-        g_xstepTargetAngle = 1.0f;
-        g_xstepCurrentAngle = 1.0f;
-        applyDashSpeedAndPitch(this, 1.0f);
-        g_endLayer = nullptr;
-        g_levelCompleteNode = nullptr;
-        PlayLayer::onQuit();
-    }
+        auto pl = PlayLayer::get();
+        if (!pl) return;
+        pl->resetLevel();
+        if (!btn2) return;
 
-    void resetLevelFromStart() {
-        if (isSecretMadnessLevel(this->m_level) && (g_orbActivated || m_fields->m_waitingPrompt || (g_reverseModeActive && !g_playerReallyDied))) {
-            return;
-        }
-        g_orbActivated = false;
-        g_promptShown = false;
-        g_reverseModeActive = false;
-        g_reverseCompleted = false;
-        g_reverseOutroActive = false;
-        g_playerReallyDied = false;
-        g_introTimer = 0.0f;
-        g_musicStarted = false;
-        g_dashCrashArmed = false;
-        g_dashInWave = false;
-        g_dashCamFixed = false;
-        g_dashLoopCount = 0;
-        g_xstepPromptOpen = false;
-        g_xstepWarpActive = false;
-        g_xstepIntroTimer = 0.0f;
-        g_xstepTargetAngle = 1.0f;
-        g_xstepCurrentAngle = 1.0f;
-        applyDashSpeedAndPitch(this, 1.0f);
-        g_endLayer = nullptr;
-        g_levelCompleteNode = nullptr;
-        m_fields->m_waitingPrompt = false;
-        m_fields->m_endTimer = 0.0f;
-        m_fields->m_camStopTimer = 0.0f;
-        PlayLayer::resetLevelFromStart();
+        unlockSecret("secret_level_10");
+        g_xstepActive = true;
+        g_xstepIntroTimer = 3.0f;
+        g_xstepTargetSpeed = 1.0f;
+        g_xstepCurrentSpeed = 1.0f;
+        g_xstepCooldown = 0.0f;
+        applySpeedAndPitch(pl, 1.0f);
+        FMODAudioEngine::sharedEngine()->pauseAllMusic(true);
+        spawnXstepIntroBanner(pl);
     }
+};
+static XstepPopupHandler g_xstepPopupHandler;
 
-    void resetLevel() {
-        if (isSecretStepLevel(this->m_level)) {
-            if (g_xstepPromptOpen) return;
-            g_xstepTargetAngle = 1.0f;
-            g_xstepCurrentAngle = 1.0f;
-            if (this->m_objectLayer) this->m_objectLayer->setRotation(0.0f);
-            applyDashSpeedAndPitch(this, 1.0f);
-            PlayLayer::resetLevel();
-            if (this->m_player1) g_xstepLastFlipped = this->m_player1->m_isUpsideDown;
+class DashPopupHandler : public FLAlertLayerProtocol {
+public:
+    void FLAlert_Clicked(FLAlertLayer*, bool btn2) override {
+        g_dashPromptOpen = false;
+        auto pl = PlayLayer::get();
+        if (!pl) return;
+        if (!btn2) {
+            pl->m_player1->m_isLocked = false;
+            pl->onQuit();
             return;
         }
-        if (isSecretDashLevel(this->m_level)) {
-            g_dashCrashArmed = false;
-            g_dashInWave = false;
-            g_dashCamFixed = false;
-            g_dashLoopCount = 0;
-            m_fields->m_camStopTimer = 0.0f;
-            applyDashSpeedAndPitch(this, 1.0f);
-            PlayLayer::resetLevel();
-            return;
-        }
-        if (!isSecretMadnessLevel(this->m_level)) {
-            PlayLayer::resetLevel();
-            return;
-        }
-        if (g_orbActivated || m_fields->m_waitingPrompt || (g_reverseModeActive && !g_playerReallyDied)) {
-            return;
-        }
-        g_orbActivated = false;
-        g_promptShown = false;
-        g_reverseModeActive = false;
-        g_reverseCompleted = false;
-        g_reverseOutroActive = false;
-        g_playerReallyDied = false;
-        g_introTimer = 0.0f;
-        g_musicStarted = false;
-        g_endLayer = nullptr;
-        g_levelCompleteNode = nullptr;
-        m_fields->m_waitingPrompt = false;
-        m_fields->m_endTimer = 0.0f;
-        PlayLayer::resetLevel();
+        unlockSecret("secret_level_22");
+        g_dashEnding = true;
+        g_dashTimer = 0.0f;
+        g_dashCamStartX = pl->m_gameState.m_cameraPosition.x;
+
+        auto win = CCDirector::sharedDirector()->getWinSize();
+        pl->ignoreAnchorPointForPosition(false);
+        pl->setAnchorPoint({ 0.5f, 0.5f });
+        pl->setPosition({ win.width * 0.5f, win.height * 0.5f });
+        pl->runAction(CCSequence::create(
+            CCDelayTime::create(1.3f),
+            CCEaseExponentialIn::create(CCScaleTo::create(1.4f, 0.0f)),
+            nullptr
+        ));
     }
+};
+static DashPopupHandler g_dashPopupHandler;
+class $modify(SecretPlayerHook, PlayerObject) {
+    void ringJump(RingObject* ring, bool p1) {
+        PlayerObject::ringJump(ring, p1);
+        auto pl = PlayLayer::get();
+        if (!pl || this != pl->m_player1) return;
+        int lvlIdx = getSecretLevelIndex(pl->m_level);
 
-    void destroyPlayer(PlayerObject* player, GameObject* obj) {
-        if (isSecretStepLevel(this->m_level) && obj && !g_xstepPromptOpen) {
-            float pct = this->getCurrentPercent();
-            if (pct >= 8.50f && pct <= 8.70f) {
-                g_xstepPromptOpen = true;
-                this->m_player1->m_isLocked = true;
-                FMODAudioEngine::sharedEngine()->stopAllMusic(true);
+        if (lvlIdx == 1 && !g_orbActivated && !g_reversePromptOpen && !g_reverseActive) {
+            if (this->getPositionX() > 24000.0f && this->getPositionY() > 210.0f) {
+                g_orbActivated = true;
+                g_reversePromptOpen = true;
+                this->m_isLocked = true;
+                FMODAudioEngine::sharedEngine()->pauseAllMusic(true);
                 auto alert = FLAlertLayer::create(
-                    &g_xstepPopupHandler,
-                    "Mysterious Secret",
-                    "Do you want to <cp>warp reality</c>?",
+                    &g_reversePopupHandler,
+                    "Reverse Secret",
+                    "Do you want to play in <cp>Reverse Mode</c>?",
                     "No",
                     "Yes"
                 );
                 alert->show();
+            }
+        }
+
+        if (lvlIdx == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
+            g_xstepCooldown = 0.14f;
+            g_xstepTargetSpeed = std::min(2.20f, g_xstepTargetSpeed + 0.10f);
+        }
+    }
+
+    void bumpPlayer(float p0, int p1, bool p2, GameObject* obj) {
+        PlayerObject::bumpPlayer(p0, p1, p2, obj);
+        auto pl = PlayLayer::get();
+        if (!pl || this != pl->m_player1) return;
+        if (getSecretLevelIndex(pl->m_level) == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
+            g_xstepCooldown = 0.14f;
+            g_xstepTargetSpeed = std::min(2.20f, g_xstepTargetSpeed + 0.20f);
+        }
+    }
+
+    void pushButton(PlayerButton btn) {
+        bool wasOnGround = this->m_isOnGround;
+        PlayerObject::pushButton(btn);
+        auto pl = PlayLayer::get();
+        if (!pl || this != pl->m_player1) return;
+        if (btn == PlayerButton::Jump && wasOnGround && getSecretLevelIndex(pl->m_level) == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
+            g_xstepCooldown = 0.14f;
+            g_xstepTargetSpeed = std::max(0.40f, g_xstepTargetSpeed - 0.05f);
+        }
+    }
+
+    void flipGravity(bool flip, bool p1) {
+        bool prev = this->m_isUpsideDown;
+        PlayerObject::flipGravity(flip, p1);
+        auto pl = PlayLayer::get();
+        if (!pl || this != pl->m_player1) return;
+        if (prev != flip && getSecretLevelIndex(pl->m_level) == 10 && g_xstepActive && g_xstepIntroTimer <= 0.0f && g_xstepCooldown <= 0.0f) {
+            g_xstepCooldown = 0.14f;
+            g_xstepTargetSpeed = std::max(0.40f, g_xstepTargetSpeed - 0.30f);
+        }
+    }
+};
+
+class $modify(HiddenSecretsMod, PlayLayer) {
+    void resetLevel() {
+        g_orbActivated = false;
+        g_reversePromptOpen = false;
+        g_reverseActive = false;
+        g_reverseIntroTimer = 0.0f;
+        g_xstepPromptOpen = false;
+        g_xstepDeathDelay = 0.0f;
+        g_xstepIntroTimer = 0.0f;
+        g_xstepTargetSpeed = 1.0f;
+        g_xstepCurrentSpeed = 1.0f;
+        g_xstepCooldown = 0.0f;
+        g_dashPromptOpen = false;
+        g_dashEnding = false;
+        g_dashTimer = 0.0f;
+        this->setScale(1.0f);
+        applySpeedAndPitch(this, 1.0f);
+        PlayLayer::resetLevel();
+    }
+
+    void destroyPlayer(PlayerObject* player, GameObject* obj) {
+        if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 10 && !g_xstepActive && !g_xstepPromptOpen) {
+            float pct = this->getCurrentPercent();
+            if (pct >= 8.40f && pct <= 8.85f) {
+                g_xstepPromptOpen = true;
+                g_xstepDeathDelay = 0.65f;
+                PlayLayer::destroyPlayer(player, obj);
                 return;
             }
         }
-        if (isSecretMadnessLevel(this->m_level) && g_reverseModeActive && (g_introTimer > 0.0f || g_reverseOutroActive || (obj && (!obj->isVisible() || obj->m_isHide || obj->getOpacity() == 0)))) {
+        PlayLayer::destroyPlayer(player, obj);
+    }
+
+    void levelComplete() {
+        if (getSecretLevelIndex(this->m_level) == 22 && !g_dashPromptOpen && !g_dashEnding) {
+            g_dashPromptOpen = true;
+            this->m_player1->m_isLocked = true;
+            FMODAudioEngine::sharedEngine()->stopAllMusic(true);
+            auto alert = FLAlertLayer::create(
+                &g_dashPopupHandler,
+                "Ultimate Crash",
+                "Do you want to trigger the <cr>Ultimate Crash</c>?",
+                "No",
+                "Yes"
+            );
+            alert->show();
             return;
         }
-        PlayLayer::destroyPlayer(player, obj);
-        if (g_reverseModeActive) g_playerReallyDied = true;
+        PlayLayer::levelComplete();
     }
 
-    void bumpPlayer(PlayerObject* p0, EffectGameObject* p1) {
-        PlayLayer::bumpPlayer(p0, p1);
-        if (isSecretStepLevel(this->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f) {
-            g_xstepTargetAngle = std::min(2.50f, g_xstepTargetAngle + 0.20f);
-            g_xstepSkipNextJump = true;
+    void update(float dt) {
+        int lvlIdx = getSecretLevelIndex(this->m_level);
+
+        if (lvlIdx == 1 && (g_reversePromptOpen || g_reverseActive)) {
+            if (g_reversePromptOpen) {
+                this->m_player1->m_isLocked = true;
+                return;
+            }
+            if (g_reverseIntroTimer > 0.0f) {
+                g_reverseIntroTimer -= dt;
+                if (g_reverseIntroTimer <= 0.0f) {
+                    std::string revSong = Mod::get()->getResourcesDir().string() + "/StereoMadness_reverse.mp3";
+                    FMODAudioEngine::sharedEngine()->playMusic(revSong.c_str(), false, 1.0f, 0);
+                }
+                return;
+            }
+            float curX = this->m_player1->getPositionX() - (311.58f * dt);
+            this->m_player1->setPositionX(curX);
+            float clampedY = std::clamp(this->m_player1->getPositionY(), 105.0f, 275.0f);
+            this->m_player1->setPositionY(clampedY);
+            this->m_gameState.m_cameraPosition.x = std::max(0.0f, curX - 110.0f);
+
+            if (g_reverseStartX > 0.0f) {
+                g_reverseProgress = std::clamp((curX / g_reverseStartX) * 100.0f, 0.0f, 100.0f);
+                if (this->m_percentageLabel) {
+                    this->m_percentageLabel->setString(fmt::format("{:.2f}%", g_reverseProgress).c_str());
+                }
+            }
+            if (curX <= 15.0f) {
+                g_reverseActive = false;
+                this->onQuit();
+            }
+            return;
         }
-    }
-    void postUpdate(float dt) {
-        PlayLayer::postUpdate(dt);
-        if (!this->m_player1) return;
 
-        if (isSecretStepLevel(this->m_level)) {
+        if (lvlIdx == 10) {
             if (g_xstepPromptOpen) {
                 if (g_xstepDeathDelay > 0.0f) {
                     g_xstepDeathDelay -= dt;
                     if (g_xstepDeathDelay <= 0.0f) {
                         FMODAudioEngine::sharedEngine()->stopAllMusic(true);
-                        auto alert = FLAlertLayer::create(&g_xstepPopupHandler, "Time Secret", "Do you want to <cp>warp time</c>?", "No", "Yes");
+                        auto alert = FLAlertLayer::create(
+                            &g_xstepPopupHandler,
+                            "Time Secret",
+                            "Do you want to <cp>warp time</c>?",
+                            "No",
+                            "Yes"
+                        );
                         alert->show();
                     }
                 }
                 return;
             }
-            if (g_xstepWarpActive) {
+            if (g_xstepActive) {
                 if (g_xstepIntroTimer > 0.0f) {
                     g_xstepIntroTimer -= dt;
                     this->m_player1->m_isLocked = true;
-                    this->m_player1->setPositionX(0.0f);
                     if (g_xstepIntroTimer <= 0.0f) {
                         this->m_player1->m_isLocked = false;
-                        this->startMusic();
+                        FMODAudioEngine::sharedEngine()->resumeAllMusic();
                     }
                     return;
                 }
-
-                bool onGround = this->m_player1->m_isOnGround;
-                if (g_xstepWasOnGround && !onGround && !this->m_player1->m_isShip && !this->m_player1->m_isDart && !this->m_player1->m_isSwing && !this->m_player1->m_isBall && !this->m_player1->m_isBird) {
-                    if (g_xstepSkipNextJump) g_xstepSkipNextJump = false;
-                    else g_xstepTargetAngle = std::max(0.35f, g_xstepTargetAngle - 0.05f);
-                }
-                g_xstepWasOnGround = onGround;
-
-                if (this->m_player1->m_isUpsideDown != g_xstepLastFlipped) {
-                    g_xstepLastFlipped = this->m_player1->m_isUpsideDown;
-                    g_xstepTargetAngle = std::max(0.35f, g_xstepTargetAngle - 0.30f);
-                }
-
-                g_xstepCurrentAngle += (g_xstepTargetAngle - g_xstepCurrentAngle) * std::min(1.0f, dt * 4.5f);
-                applyDashSpeedAndPitch(this, g_xstepCurrentAngle);
-            }
-            return;
-        }
-
-        if (isSecretDashLevel(this->m_level)) {
-            float px = this->m_player1->getPositionX();
-            float py = this->m_player1->getPositionY();
-
-            if (!g_dashCrashArmed && px > 21000.0f && py > 195.0f) {
-                g_dashCrashArmed = true;
-                g_dashInWave = false;
-                g_dashCamFixed = false;
-                g_dashLoopCount = 0;
-                m_fields->m_camStopTimer = 0.0f;
-                unlockSecret("secret_22");
-            }
-
-            if (g_dashCrashArmed && !this->m_player1->m_isDead) {
-                if (g_dashWaveStartPos.x < 1000.0f && !this->m_player1->m_isDart && px > 20000.0f) {
-                    g_dashWaveStartPos = this->m_player1->getPosition();
-                    auto* fmod = FMODAudioEngine::sharedEngine();
-                    if (fmod) g_dashWaveMusicMS = fmod->getMusicTimeMS(0);
-                }
-
-                if (!g_dashInWave && this->m_player1->m_isDart) {
-                    g_dashInWave = true;
-                }
-
-                if (g_dashInWave && !g_dashCamFixed && this->m_objectLayer) {
-                    m_fields->m_camStopTimer += dt;
-                    if (m_fields->m_camStopTimer >= 0.45f) {
-                        g_dashCamFixed = true;
-                        g_dashFixedCamPos = this->m_objectLayer->getPosition();
-                    }
-                }
-
-                if (g_dashCamFixed && this->m_objectLayer) {
-                    this->m_objectLayer->setPosition(g_dashFixedCamPos);
-                }
-
-                if (g_dashInWave && g_dashWaveStartPos.x > 1000.0f && (!this->m_player1->m_isDart || px >= g_dashWaveStartPos.x + 840.0f)) {
-                    g_dashInWave = false;
-                    g_dashLoopCount++;
-                    if (g_dashLoopCount >= 25) {
-                        std::abort();
-                    }
-                    float nextSpeed = 1.0f + (g_dashLoopCount * 0.04f);
-                    applyDashSpeedAndPitch(this, nextSpeed);
-                    this->m_player1->setPosition({ g_dashWaveStartPos.x - 40.0f, g_dashWaveStartPos.y });
-                    this->m_player1->m_yVelocity = 0.0;
-                    auto* fmod = FMODAudioEngine::sharedEngine();
-                    if (fmod) fmod->setMusicTimeMS(g_dashWaveMusicMS, true, 0);
-                }
-            }
-            return;
-        }
-        if (!isSecretMadnessLevel(this->m_level)) return;
-
-        if (!g_orbActivated && !g_reverseModeActive && this->m_objects) {
-            for (auto* obj : CCArrayExt<GameObject*>(this->m_objects)) {
-                if (obj && obj->m_objectID == 1594) {
-                    if (fabsf(obj->getPositionX() - this->m_player1->getPositionX()) < 100.0f && fabsf(obj->getPositionY() - this->m_player1->getPositionY()) < 100.0f) {
-                        g_orbActivated = true;
-                        g_savedEndX = this->m_player1->getPositionX();
-                        break;
-                    }
-                }
+                if (g_xstepCooldown > 0.0f) g_xstepCooldown -= dt;
+                float diff = g_xstepTargetSpeed - g_xstepCurrentSpeed;
+                g_xstepCurrentSpeed += diff * std::min(1.0f, dt * 2.2f);
+                applySpeedAndPitch(this, g_xstepCurrentSpeed);
             }
         }
 
-        if (m_fields->m_waitingPrompt && !g_promptShown) {
-            m_fields->m_endTimer += dt;
-            if (m_fields->m_endTimer >= 0.04f) {
-                m_fields->m_waitingPrompt = false;
-                g_promptShown = true;
-
-                auto win = CCDirector::sharedDirector()->getWinSize();
-                auto* children = this->getChildren();
-                if (children) {
-                    for (int i = static_cast<int>(children->count()) - 1; i >= 0; --i) {
-                        auto* child = static_cast<CCNode*>(children->objectAtIndex(i));
-                        if (!child || child == this->m_objectLayer || !child->isVisible()) continue;
-                        if (fabsf(child->getPositionX() - win.width * 0.5f) < 80.0f && fabsf(child->getPositionY() - win.height * 0.5f) < 80.0f && !g_levelCompleteNode) {
-                            g_levelCompleteNode = child;
-                            g_levelCompleteNode->pauseSchedulerAndActions();
-                            break;
-                        }
-                    }
-                }
-
-                auto alert = FLAlertLayer::create(
-                    &g_reversePopupHandler,
-                    "Reverse Secret",
-                    "Do you want to activate the <cp>Reverse Mode</c>?",
-                    "No",
-                    "Yes"
-                );
-                alert->show();
-            }
-        }
-
-        if (g_reverseModeActive && !g_reverseCompleted) {
-            if (!this->m_player1->m_isDead) g_playerReallyDied = false;
-
-            if (g_introTimer > 0.0f) {
-                g_introTimer -= dt;
+        if (lvlIdx == 22) {
+            if (g_dashPromptOpen) {
                 this->m_player1->m_isLocked = true;
-                this->m_player1->m_yVelocity = 0.0;
-
-                if (g_introTimer > 0.85f) {
-                    this->m_player1->setVisible(false);
-                    this->m_player1->setScale(1.0f);
-                    this->m_player1->setRotation(-180.0f);
-                    this->m_player1->setPosition({ g_savedEndX + 340.0f, 195.0f });
-                } else {
-                    if (!g_musicStarted) {
-                        g_musicStarted = true;
-                        FMODAudioEngine::sharedEngine()->playMusic("StereoMadness_reverse.mp3"_spr, true, 0.0f, 0);
-                    }
-                    float tOut = 1.0f - (g_introTimer / 0.85f);
-                    float curX = (g_savedEndX + 340.0f) - (340.0f * tOut);
-                    this->m_player1->setVisible(true);
-                    this->m_player1->setScale(1.0f);
-                    this->m_player1->setRotation(-180.0f * (1.0f - tOut));
-                    this->m_player1->setPosition({ curX, 195.0f });
-                }
-
-                if (g_introTimer <= 0.0f) {
-                    this->m_player1->m_isLocked = false;
-                    this->m_player1->setRotation(0.0f);
-                    if (this->m_endPortal) {
-                        this->m_endPortal->setVisible(false);
-                        this->m_endPortal->setPosition({ -5000.0f, -5000.0f });
-                    }
+                return;
+            }
+            if (g_dashEnding) {
+                this->m_player1->m_isLocked = true;
+                g_dashTimer += dt;
+                float slowEase = std::min(1.0f, g_dashTimer / 1.3f);
+                float decel = 1.0f - (slowEase * slowEase);
+                this->m_gameState.m_cameraPosition.x += 280.0f * decel * dt;
+                if (g_dashTimer >= 2.75f) {
+                    g_dashEnding = false;
+                    this->onQuit();
                 }
                 return;
             }
-
-            float px = this->m_player1->getPositionX();
-            if (this->m_player1->m_isShip && this->m_player1->getPositionY() > 282.0f) {
-                this->m_player1->setPositionY(282.0f);
-                if (this->m_player1->m_yVelocity > 0.0) this->m_player1->m_yVelocity = 0.0;
-            }
-            float pct = (px / g_savedEndX) * 100.0f;
-            if (pct < 0.0f) pct = 0.0f;
-            if (pct > 100.0f) pct = 100.0f;
-
-            if (this->m_percentageLabel) {
-                this->m_percentageLabel->setString(fmt::format("{:.2f}%", pct).c_str());
-            }
-            if (this->m_progressFill && this->m_progressBar) {
-                float fullW = this->m_progressBar->getContentSize().width - 4.0f;
-                this->m_progressFill->setTextureRect({ 0.0f, 0.0f, fullW * (pct / 100.0f), this->m_progressFill->getContentSize().height });
-            }
-
-            if (px <= 140.0f && !g_reverseOutroActive) {
-                g_reverseOutroActive = true;
-                this->m_player1->m_isLocked = true;
-            }
-
-            if (g_reverseOutroActive) {
-                this->m_player1->setPositionX(px - (310.0f * dt));
-                this->m_player1->m_yVelocity = 0.0;
-                if (this->m_objectLayer && this->m_objectLayer->getPositionX() < 0.0f) {
-                    float nextCamX = this->m_objectLayer->getPositionX() + (120.0f * dt);
-                    if (nextCamX > 0.0f) nextCamX = 0.0f;
-                    this->m_objectLayer->setPositionX(nextCamX);
-                }
-                if (this->m_player1->getPositionX() <= -75.0f) {
-                    g_reverseCompleted = true;
-                    g_reverseModeActive = false;
-                    g_reverseOutroActive = false;
-                    FMODAudioEngine::sharedEngine()->stopAllMusic(true);
-                    FMODAudioEngine::sharedEngine()->playEffect("playSound_reverse.ogg"_spr);
-                    this->onQuit();
-                }
-            }
         }
-    }
-};
 
-class $modify(ReverseEndLayerHook, EndLevelLayer) {
-    void showLayer(bool instant) {
-        if (g_orbActivated && !g_reverseCompleted) {
-            g_endLayer = this;
-            auto* pl = PlayLayer::get();
-            if (pl) {
-                static_cast<HiddenSecretsMod*>(pl)->m_fields->m_waitingPrompt = true;
-                static_cast<HiddenSecretsMod*>(pl)->m_fields->m_endTimer = 0.0f;
-            }
-            this->setVisible(false);
-            this->setPositionY(2000.0f);
-            return;
-        }
-        EndLevelLayer::showLayer(instant);
-    }
-};
-
-class $modify(SecretOrbHook, PlayerObject) {
-    void ringJump(RingObject* ring, bool p1) {
-        PlayerObject::ringJump(ring, p1);
-        auto* pl = PlayLayer::get();
-        if (!ring || !pl) return;
-        if (isSecretStepLevel(pl->m_level) && g_xstepWarpActive && g_xstepIntroTimer <= 0.0f) {
-            g_xstepTargetAngle = std::min(2.50f, g_xstepTargetAngle + 0.10f);
-            g_xstepSkipNextJump = true;
-        }
-        if (ring->m_objectID == 1594 && isSecretMadnessLevel(pl->m_level)) {
-            g_orbActivated = true;
-            g_savedEndX = this->getPositionX();
-        }
-    }
-};
-
-class $modify(ReverseKeyHook, CCKeyboardDispatcher) {
-    bool dispatchKeyboardMSG(enumKeyCodes key, bool isKeyDown, bool isKeyRepeat, double ts) {
-        auto* pl = PlayLayer::get();
-        if (isKeyDown && !isKeyRepeat && g_reverseModeActive && pl && key == enumKeyCodes::KEY_Escape) {
-            pl->m_hasCompletedLevel = false;
-            pl->pauseGame(false);
-            return true;
-        }
-        return CCKeyboardDispatcher::dispatchKeyboardMSG(key, isKeyDown, isKeyRepeat, ts);
+        PlayLayer::update(dt);
     }
 };
