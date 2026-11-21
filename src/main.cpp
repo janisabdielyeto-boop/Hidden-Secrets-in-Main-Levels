@@ -28,7 +28,7 @@ static const std::vector<SecretDef> g_implementedSecrets = {
         "Plays the end-wall reverse curve & ring shockwave, rewinds from 100.00% down to 0.00% in balanced Free Mode with reversed music!",
         "1. Play Level 1: Stereo Madness (or Secret Madness).\n2. Fly to the very top at the end of the final ship section.\n3. Click/tap the hidden toggle orb to open Reverse Secret and press YES!"
     },
-    {
+    {"secret_level_2",2,"Back on Track","Gravity Chaos","Automatically flips your gravity every 2.5 seconds with a warning flash and sound all the way to the end!","1. Play Level 2: Back on Track.\n2. Jump over the first spike at the start and land on the second spike between 1.70% and 2.00%.\n3. After the cube explodes, press YES on Gravity Chaos!"},{
         "secret_level_10",
         10,
         "xStep",
@@ -58,12 +58,12 @@ static void unlockSecret(const char* key) {
 
 static int getSecretLevelIndex(GJGameLevel* lvl) {
     if (!lvl) return 0;
-    if (lvl->m_levelID == 1 || lvl->m_levelID == 10 || lvl->m_levelID == 22) {
+    if (lvl->m_levelID == 1 || lvl->m_levelID == 2 || lvl->m_levelID == 10 || lvl->m_levelID == 22) {
         return lvl->m_levelID;
     }
     std::string name = lvl->m_levelName;
     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-    if (name.find("madness") != std::string::npos || (lvl->m_levelID == 0 && lvl->m_songID == 0)) return 1;
+    if (name.find("madness") != std::string::npos || (lvl->m_levelID == 0 && lvl->m_songID == 0)) return 1; if (name.find("track") != std::string::npos || lvl->m_songID == 1) return 2;
     if (name.find("step") != std::string::npos || lvl->m_songID == 9) return 10;
     if (name.find("dash") != std::string::npos || lvl->m_songID == 21) return 22;
     return 0;
@@ -327,7 +327,7 @@ class $modify(SecretPauseHook, PauseLayer) {
         if (auto popup = SecretsCodexPopup::create()) popup->show();
     }
 };
-static bool g_orbActivated = false;
+static bool g_botPromptOpen = false; static bool g_botActive = false; static float g_botDeathDelay = 0.0f; static float g_botFlipTimer = 2.5f; class BotPopupHandler : public FLAlertLayerProtocol { public: void FLAlert_Clicked(FLAlertLayer*, bool btn2) override { g_botPromptOpen = false; auto pl = PlayLayer::get(); if (!pl) return; pl->resetLevel(); if (!btn2) return; unlockSecret("secret_level_2"); g_botActive = true; g_botFlipTimer = 2.5f; } }; static BotPopupHandler g_botPopupHandler; static bool g_botPromptOpen = false; g_botDeathDelay = 0.0f; g_botFlipTimer = 2.5f; g_orbActivated = false;
 static bool g_reversePromptOpen = false;
 static bool g_reverseActive = false;
 static float g_reverseIntroTimer = 0.0f;
@@ -519,7 +519,7 @@ class $modify(SecretPlayerHook, PlayerObject) {
 
 class $modify(HiddenSecretsMod, PlayLayer) {
     void resetLevel() {
-        g_orbActivated = false;
+        g_botPromptOpen = false; g_botDeathDelay = 0.0f; g_botFlipTimer = 2.5f; g_orbActivated = false;
         g_reversePromptOpen = false;
         g_reverseActive = false;
         g_reverseIntroTimer = 0.0f;
@@ -538,7 +538,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
     }
 
     void destroyPlayer(PlayerObject* player, GameObject* obj) {
-        if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 10 && !g_xstepActive && !g_xstepPromptOpen) {
+        if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 2 && !g_botActive && !g_botPromptOpen) { float pct = this->getCurrentPercent(); if (pct >= 1.70f && pct <= 2.00f) { g_botPromptOpen = true; g_botDeathDelay = 0.65f; PlayLayer::destroyPlayer(player, obj); return; } } if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 10 && !g_xstepActive && !g_xstepPromptOpen) {
             float pct = this->getCurrentPercent();
             if (pct >= 8.40f && pct <= 8.85f) {
                 g_xstepPromptOpen = true;
@@ -603,7 +603,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
             return;
         }
 
-        if (lvlIdx == 10) {
+        if (lvlIdx == 2) { if (g_botPromptOpen) { if (g_botDeathDelay > 0.0f) { g_botDeathDelay -= dt; if (g_botDeathDelay <= 0.0f) { FMODAudioEngine::sharedEngine()->stopAllMusic(true); FLAlertLayer::create(&g_botPopupHandler, "Gravity Chaos", "Do you want to unleash <cy>Gravity Chaos</c>?", "No", "Yes")->show(); } } return; } if (g_botActive && !this->m_player1->m_isDead) { g_botFlipTimer -= dt; if (g_botFlipTimer <= 0.0f) { g_botFlipTimer = 2.5f; bool nf = !this->m_player1->m_isUpsideDown; this->m_player1->flipGravity(nf, true); FMODAudioEngine::sharedEngine()->playEffect("playSound_01.ogg"); auto fl = CCLayerColor::create(nf ? ccc4(0, 190, 255, 75) : ccc4(255, 110, 200, 75)); this->addChild(fl, 115); fl->runAction(CCSequence::create(CCFadeOut::create(0.35f), CCRemoveSelf::create(), nullptr)); } } } if (lvlIdx == 10) {
             if (g_xstepPromptOpen) {
                 if (g_xstepDeathDelay > 0.0f) {
                     g_xstepDeathDelay -= dt;
