@@ -338,7 +338,7 @@ static float g_reverseIntroTimer = 0.0f;
 static float g_reverseProgress = 100.0f;
 static float g_reverseStartX = 0.0f;
 
-static bool g_botTriggeredThisDeath = false;
+static bool g_botTriggeredThisDeath = false; static float g_lastBotPct = 0.0f;
 static bool g_botPromptOpen = false;
 static bool g_botActive = false;
 static float g_botFlipTimer = 2.5f;
@@ -538,15 +538,14 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         if (lvlIdx == 2 && this->m_player1) {
             if (g_botPromptOpen) return;
             if (this->m_player1->m_isDead && !g_botActive && !g_botTriggeredThisDeath) {
-                float px = this->m_player1->getPositionX();
-                if (px >= 195.0f && px <= 330.0f) {
+                if (g_lastBotPct >= 1.65f && g_lastBotPct <= 2.05f) {
                     g_botTriggeredThisDeath = true;
                     g_botPromptOpen = true;
                     FMODAudioEngine::sharedEngine()->stopAllMusic(true);
                     FLAlertLayer::create(&g_botPopupHandler, "Gravity Chaos", "Do you want to unleash Gravity Chaos?", "No", "Yes")->show();
                     return;
                 }
-            } else if (g_botActive && !this->m_player1->m_isDead) {
+            } else if (!this->m_player1->m_isDead) { g_lastBotPct = this->getCurrentPercent(); if (g_botActive) {
                 g_botFlipTimer -= dt;
                 if (g_botFlipTimer <= 0.0f) {
                     g_botFlipTimer = 2.5f;
@@ -557,7 +556,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
                     this->addChild(fl, 115);
                     fl->runAction(CCSequence::create(CCFadeOut::create(0.35f), CCRemoveSelf::create(), nullptr));
                 }
-            }
+            } }
         }
 
         if (lvlIdx == 1 && (g_reversePromptOpen || g_reverseActive)) {
