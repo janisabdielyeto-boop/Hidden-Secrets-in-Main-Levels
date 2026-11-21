@@ -71,7 +71,7 @@ static int getSecretLevelIndex(GJGameLevel* lvl) {
     std::string name = lvl->m_levelName;
     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
     if (name.find("madness") != std::string::npos) return 1;
-    if (name.find("track") != std::string::npos) return 2;
+    if (name.find("track") != std::string::npos || lvl->m_songID == 1) return 2;
     if (name.find("step") != std::string::npos) return 10;
     if (name.find("dash") != std::string::npos) return 22;
     return 0;
