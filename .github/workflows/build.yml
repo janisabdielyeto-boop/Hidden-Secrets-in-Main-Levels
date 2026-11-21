@@ -11,4 +11,4 @@ jobs:
   build:
     uses: geode-sdk/build-geode-mod/.github/workflows/build.yml@main
     with:
-      platforms: windows,android64
+      platforms: windows
