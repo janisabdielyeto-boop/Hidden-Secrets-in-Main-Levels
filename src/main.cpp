@@ -28,7 +28,7 @@ static const std::vector<SecretDef> g_implementedSecrets = {
         "Plays the end-wall reverse curve & ring shockwave, rewinds from 100.00% down to 0.00% in balanced Free Mode with reversed music!",
         "1. Play Level 1: Stereo Madness (or Secret Madness).\n2. Fly to the very top at the end of the final ship section.\n3. Click/tap the hidden toggle orb to open Reverse Secret and press YES!"
     },
-    {"secret_level_2",2,"Back on Track","Gravity Chaos","Automatically flips your gravity every 2.5 seconds with a warning flash and sound all the way to the end!","Step 1: Open Level 2 (Back on Track) in Normal Mode.\nStep 2: At the very beginning (around 1.70% - 2.00%), crash directly into the first spikes (either without jumping at 1.72% or landing on the second spike at 1.93%).\nStep 3: Wait 0.5s for your cube to explode — the 'Gravity Chaos' popup will appear. Click YES to activate automatic gravity flips every 2.5 seconds!"},{
+    {"secret_level_2",2,"Back on Track","Gravity Chaos","Automatically flips your gravity every 2.5 seconds with a warning flash and sound all the way to the end!","Step 1: Open Level 2 (Back on Track).\nStep 2: At the very start (around 1.70% to 2.00%), jump\nover the first spike and land on the second spike.\nStep 3: Wait for your cube to explode, then press YES\non Gravity Chaos to flip gravity every 2.5 seconds!"},{
         "secret_level_10",
         10,
         "xStep",
@@ -193,7 +193,7 @@ protected:
         m_mainLayer->addChild(innerBox);
 
         std::string fullText = fmt::format(
-            "STATUS: {}\n--- WHAT IT IS ---\n{}\n--- HOW TO FIND IT ---\n{}",
+            "STATUS: {}\nWHAT IT IS:\n{}\nHOW TO FIND IT:\n{}",
             unlocked ? "DISCOVERED!" : "NOT DISCOVERED YET",
             unlocked ? s.whatItIs : "??? (Discover this secret in-game to unlock its full description!)",
             s.howToFind
@@ -538,7 +538,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
     }
 
     void destroyPlayer(PlayerObject* player, GameObject* obj) {
-        if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 2 && !g_botActive && !g_botPromptOpen) { float pct = this->getCurrentPercent(); if (pct >= 1.65f && pct <= 2.05f) { g_botPromptOpen = true; g_botDeathDelay = 0.45f; PlayLayer::destroyPlayer(player, obj); return; } } if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 10 && !g_xstepActive && !g_xstepPromptOpen) {
+        if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 2 && !g_botActive && !g_botPromptOpen) { float pct = this->getCurrentPercent(); if (this->m_player1->getPositionX() >= 180.0f && this->m_player1->getPositionX() <= 300.0f) { g_botPromptOpen = true; g_botDeathDelay = 0.45f; PlayLayer::destroyPlayer(player, obj); return; } } if (player == this->m_player1 && getSecretLevelIndex(this->m_level) == 10 && !g_xstepActive && !g_xstepPromptOpen) {
             float pct = this->getCurrentPercent();
             if (pct >= 8.40f && pct <= 8.85f) {
                 g_xstepPromptOpen = true;
