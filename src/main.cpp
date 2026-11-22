@@ -622,7 +622,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
                         auto fmod = FMODAudioEngine::sharedEngine();
                         fmod->playMusic("Dash.mp3", false, 1.0f, 0);
                         if (fmod->m_backgroundMusicChannel) {
-                            fmod->m_backgroundMusicChannel->setPosition(108000, FMOD_TIMEUNIT_MS);
+                            fmod->setMusicTimeMS(108000, true, 0);
                         }
                     }
                     return;
@@ -652,7 +652,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
                         this->m_player1->setPosition({ g_dashLoopStartX, g_dashLoopStartY });
                         this->m_gameState.m_cameraPosition.x = std::max(0.0f, g_dashLoopStartX - 110.0f);
                         if (fmod && fmod->m_backgroundMusicChannel) {
-                            fmod->m_backgroundMusicChannel->setPosition(108000, FMOD_TIMEUNIT_MS);
+                            fmod->setMusicTimeMS(108000, true, 0);
                         }
                     }
                     return;
