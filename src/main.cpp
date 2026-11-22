@@ -441,7 +441,7 @@ public:
     }
 };
 static DashPopupHandler g_dashPopupHandler;
-class $modify(SecretPlayerHook, PlayerObject) {
+class $modify(SecretPlayerHook, PlayerObject) { void playerDestroyed(bool p0) { PlayerObject::playerDestroyed(p0); auto pl = PlayLayer::get(); if (pl && this == pl->m_player1 && getSecretLevelIndex(pl->m_level) == 2 && !g_botActive && !g_botPromptOpen) { float pct = pl->getCurrentPercent(); if (pct >= 1.50f && pct <= 2.30f) { g_botTriggeredThisDeath = true; g_botPromptOpen = true; FMODAudioEngine::sharedEngine()->stopAllMusic(true); FLAlertLayer::create(&g_botPopupHandler, "Gravity Chaos", "Do you want to unleash Gravity Chaos?", "No", "Yes")->show(); } } } 
     void ringJump(RingObject* ring, bool p1) {
         PlayerObject::ringJump(ring, p1);
         auto pl = PlayLayer::get();
