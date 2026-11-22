@@ -429,7 +429,7 @@ static XstepPopupHandler g_xstepPopupHandler;
 class $modify(SecretPlayerHook, PlayerObject) { void playerDestroyed(bool p0) { PlayerObject::playerDestroyed(p0); auto pl = PlayLayer::get(); if (pl && this == pl->m_player1 && getSecretLevelIndex(pl->m_level) == 2 && !g_botActive && !g_botPromptOpen) { float pct = pl->getCurrentPercent(); if (pct >= 1.50f && pct <= 2.30f) { g_botTriggeredThisDeath = true; g_botPromptOpen = true; FMODAudioEngine::sharedEngine()->stopAllMusic(true); FLAlertLayer::create(&g_botPopupHandler, "Gravity Chaos", "Do you want to unleash Gravity Chaos?", "No", "Yes")->show(); } } } 
     void ringJump(RingObject* ring, bool p1) {
         auto plDash = PlayLayer::get();
-        if (plDash && this == plDash->m_player1 && getSecretLevelIndex(plDash->m_level) == 22 && !g_dashArmTriggered && !g_dashEnding) { float p = plDash->getCurrentPercent(); if (p >= 81.2f && p <= 83.2f) { g_dashArmTriggered = true; unlockSecret("secret_level_22"); } }
+        if (plDash && this == plDash->m_player1 && getSecretLevelIndex(plDash->m_level) == 22 && !g_dashArmTriggered && !g_dashEnding) { float px = this->getPositionX(); if (px >= 32500.0f && px <= 36500.0f) { g_dashArmTriggered = true; unlockSecret("secret_level_22"); FLAlertLayer::create("Ultimate Crash", "Trap Armed! Enter the wave!", "OK")->show(); } }
         PlayerObject::ringJump(ring, p1);
         auto pl = PlayLayer::get();
         if (!pl || this != pl->m_player1) return;
@@ -582,16 +582,16 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         }
 
                         if (lvlIdx == 22 && this->m_player1) {
-            float pct = this->getCurrentPercent();
-            if (!g_dashArmTriggered && !g_dashEnding && pct >= 81.0f && pct <= 82.8f) {
+            float px = this->m_player1->getPositionX();
+            if (!g_dashArmTriggered && !g_dashEnding && px >= 33200.0f && px <= 34500.0f) {
                 spawnDashToggleOrb(this);
             }
             if (g_dashArmTriggered && !g_dashEnding) {
-                if (pct >= 91.6f && pct <= 92.0f && g_dashWaveStartX == 0.0f) {
+                if (px >= 37800.0f && px <= 38300.0f && g_dashWaveStartX == 0.0f) {
                     g_dashWaveStartX = this->m_player1->getPositionX();
                     g_dashWaveStartY = this->m_player1->getPositionY();
                 }
-                if (pct >= 94.3f && g_dashWaveStartX > 0.0f) {
+                if (px >= 39150.0f && g_dashWaveStartX > 0.0f) {
                     g_dashWaveEndX = this->m_player1->getPositionX();
                     g_dashEnding = true;
                     g_dashLoopCount = 1;
