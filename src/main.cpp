@@ -359,6 +359,8 @@ static float g_dashWaveStartX = 0.0f;
 static float g_dashWaveStartY = 0.0f;
 static float g_dashWaveEndX = 0.0f;
 
+static void spawnDashToggleOrb(PlayLayer* pl) { if (!pl || !pl->m_objectLayer || pl->m_objectLayer->getChildByTag(8822)) return; auto orb = CCSprite::createWithSpriteFrameName("ring_01_001.png"); if (!orb) return; orb->setTag(8822); orb->setColor({ 255, 90, 90 }); orb->setScale(1.15f); orb->setPosition({ pl->m_player1->getPositionX() + 140.0f, pl->m_player1->getPositionY() + 45.0f }); pl->m_objectLayer->addChild(orb, 50); } 
+
 class ReversePopupHandler : public FLAlertLayerProtocol {
 public:
     void FLAlert_Clicked(FLAlertLayer*, bool btn2) override {
@@ -504,16 +506,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         PlayLayer::destroyPlayer(player, obj);
     }
 
-    void levelComplete() {
-        if (getSecretLevelIndex(this->m_level) == 22 && !g_dashPromptOpen && !g_dashEnding) {
-            g_dashPromptOpen = true;
-            this->m_player1->m_isLocked = true;
-            FMODAudioEngine::sharedEngine()->stopAllMusic(true);
-            FLAlertLayer::create(&g_dashPopupHandler, "Ultimate Crash", "Do you want to trigger the Ultimate Crash?", "No", "Yes")->show();
-            return;
-        }
-        PlayLayer::levelComplete();
-    }
+    void levelComplete() { PlayLayer::levelComplete(); }
 
     void update(float dt) {
         int lvlIdx = getSecretLevelIndex(this->m_level);
