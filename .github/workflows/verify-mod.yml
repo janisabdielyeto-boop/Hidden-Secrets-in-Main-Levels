@@ -1,0 +1,9 @@
+name: Verify Mod Structure
+on: [push, workflow_dispatch]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check mod files
+        run: test -f mod.json && test -f src/main.cpp && test -f logo.png && echo 'All mod files verified!'
