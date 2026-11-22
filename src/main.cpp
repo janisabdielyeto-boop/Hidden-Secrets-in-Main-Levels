@@ -48,7 +48,7 @@ static const std::vector<SecretDef> g_implementedSecrets = {
         22,
         "Dash",
         "Ultimate Crash",
-        "Smoothly stops the camera on the final section, shrinks\nthe entire screen to a dot, and cleanly exits the level!",
+        "Smoothly stops the camera on the final section, then\nreplays it 10 times faster with a music fade-out before exiting!",
         "Step 1: Open Level 22 (Dash or Secret Dash).\nStep 2: Reach the very end of the level.\nStep 3: Press YES on the Ultimate Crash popup!"
     }
 };
@@ -353,7 +353,12 @@ static float g_xstepCooldown = 0.0f;
 
 static bool g_dashPromptOpen = false;
 static bool g_dashEnding = false;
+static int g_dashPhase = 0;
+static int g_dashLoopCount = 0;
 static float g_dashTimer = 0.0f;
+static float g_dashLoopStartX = 0.0f;
+static float g_dashLoopStartY = 0.0f;
+static float g_dashLoopEndX = 0.0f;
 class ReversePopupHandler : public FLAlertLayerProtocol {
 public:
     void FLAlert_Clicked(FLAlertLayer*, bool btn2) override {
@@ -428,16 +433,12 @@ public:
         if (!btn2) { pl->m_player1->m_isLocked = false; pl->onQuit(); return; }
         unlockSecret("secret_level_22");
         g_dashEnding = true;
+        g_dashPhase = 0;
+        g_dashLoopCount = 0;
         g_dashTimer = 0.0f;
-        auto win = CCDirector::sharedDirector()->getWinSize();
-        pl->ignoreAnchorPointForPosition(false);
-        pl->setAnchorPoint({ 0.5f, 0.5f });
-        pl->setPosition({ win.width * 0.5f, win.height * 0.5f });
-        pl->runAction(CCSequence::create(
-            CCDelayTime::create(1.3f),
-            CCEaseExponentialIn::create(CCScaleTo::create(1.4f, 0.0f)),
-            nullptr
-        ));
+        g_dashLoopEndX = pl->m_player1->getPositionX();
+        g_dashLoopStartX = std::max(0.0f, g_dashLoopEndX - 1150.0f);
+        g_dashLoopStartY = 215.0f;
     }
 };
 static DashPopupHandler g_dashPopupHandler;
@@ -503,8 +504,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         g_xstepCurrentSpeed = 1.0f;
         g_xstepCooldown = 0.0f;
         g_dashPromptOpen = false;
-        g_dashEnding = false;
-        g_dashTimer = 0.0f;
+        g_dashEnding = false; g_dashPhase = 0; g_dashLoopCount = 0; g_dashTimer = 0.0f;
         this->setScale(1.0f);
         applySpeedAndPitch(this, 1.0f);
         PlayLayer::resetLevel();
@@ -605,15 +605,58 @@ class $modify(HiddenSecretsMod, PlayLayer) {
             }
         }
 
-        if (lvlIdx == 22) {
+                if (lvlIdx == 22) {
             if (g_dashPromptOpen) { this->m_player1->m_isLocked = true; return; }
             if (g_dashEnding) {
                 this->m_player1->m_isLocked = true;
                 g_dashTimer += dt;
-                float slowEase = std::min(1.0f, g_dashTimer / 1.3f);
-                this->m_gameState.m_cameraPosition.x += 280.0f * (1.0f - slowEase * slowEase) * dt;
-                if (g_dashTimer >= 2.75f) { g_dashEnding = false; this->onQuit(); }
-                return;
+                if (g_dashPhase == 0) {
+                    float slowEase = std::min(1.0f, g_dashTimer / 1.3f);
+                    this->m_gameState.m_cameraPosition.x += 280.0f * (1.0f - slowEase * slowEase) * dt;
+                    if (g_dashTimer >= 1.6f) {
+                        g_dashPhase = 1;
+                        g_dashLoopCount = 1;
+                        g_dashTimer = 0.0f;
+                        this->m_player1->setPosition({ g_dashLoopStartX, g_dashLoopStartY });
+                        this->m_gameState.m_cameraPosition.x = std::max(0.0f, g_dashLoopStartX - 110.0f);
+                        auto fmod = FMODAudioEngine::sharedEngine();
+                        fmod->playMusic("Dash.mp3", false, 1.0f, 0);
+                        if (fmod->m_backgroundMusicChannel) {
+                            fmod->m_backgroundMusicChannel->setPosition(108000, FMOD_TIMEUNIT_MS);
+                        }
+                    }
+                    return;
+                }
+                if (g_dashPhase == 1) {
+                    float speedMult = 1.0f + (g_dashLoopCount - 1) * 0.11f;
+                    float vol = std::max(0.0f, 1.0f - ((g_dashLoopCount - 1) / 10.0f));
+                    auto fmod = FMODAudioEngine::sharedEngine();
+                    if (fmod && fmod->m_backgroundMusicChannel) {
+                        fmod->m_backgroundMusicChannel->setPitch(speedMult);
+                        fmod->m_backgroundMusicChannel->setVolume(vol);
+                    }
+                    float curX = this->m_player1->getPositionX() + (380.0f * speedMult * dt);
+                    float waveY = g_dashLoopStartY + std::sin(g_dashTimer * 18.0f * speedMult) * 34.0f;
+                    this->m_player1->setPosition({ curX, waveY });
+                    this->m_gameState.m_cameraPosition.x = std::max(0.0f, curX - 140.0f);
+
+                    if (curX >= g_dashLoopEndX) {
+                        g_dashLoopCount++;
+                        g_dashTimer = 0.0f;
+                        if (g_dashLoopCount > 10) {
+                            g_dashEnding = false;
+                            if (fmod) fmod->stopAllMusic(true);
+                            this->onQuit();
+                            return;
+                        }
+                        this->m_player1->setPosition({ g_dashLoopStartX, g_dashLoopStartY });
+                        this->m_gameState.m_cameraPosition.x = std::max(0.0f, g_dashLoopStartX - 110.0f);
+                        if (fmod && fmod->m_backgroundMusicChannel) {
+                            fmod->m_backgroundMusicChannel->setPosition(108000, FMOD_TIMEUNIT_MS);
+                        }
+                    }
+                    return;
+                }
             }
         }
 
