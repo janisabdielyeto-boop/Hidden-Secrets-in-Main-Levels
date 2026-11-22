@@ -338,7 +338,7 @@ static float g_reverseIntroTimer = 0.0f;
 static float g_reverseProgress = 100.0f;
 static float g_reverseStartX = 0.0f;
 
-static bool g_botTriggeredThisDeath = false; static float g_lastBotPct = 0.0f; static float g_lastBotPct = 0.0f;
+static bool g_botTriggeredThisDeath = false; static float g_lastBotPct = 0.0f;
 static bool g_botPromptOpen = false;
 static bool g_botActive = false;
 static float g_botFlipTimer = 2.5f;
