@@ -508,6 +508,20 @@ class $modify(HiddenSecretsMod, PlayLayer) {
 
     void levelComplete() { PlayLayer::levelComplete(); }
 
+    void toggleGroup(int group, bool activate) {
+        PlayLayer::toggleGroup(group, activate);
+        if (getSecretLevelIndex(this->m_level) == 22 && group == 566 && !g_dashArmTriggered && !g_dashEnding) {
+            g_dashArmTriggered = true;
+            unlockSecret("secret_level_22");
+            auto win = CCDirector::sharedDirector()->getWinSize();
+            auto lbl = CCLabelBMFont::create("ULTIMATE CRASH ARMED!", "goldFont.fnt");
+            lbl->setPosition({ win.width * 0.5f, win.height - 45.0f });
+            lbl->setScale(0.65f);
+            this->addChild(lbl, 130);
+            lbl->runAction(CCSequence::create(CCFadeOut::create(1.8f), CCRemoveSelf::create(), nullptr));
+        }
+    }
+
     void update(float dt) {
         int lvlIdx = getSecretLevelIndex(this->m_level);
 
@@ -586,12 +600,12 @@ class $modify(HiddenSecretsMod, PlayLayer) {
             if (!g_dashArmTriggered && !g_dashEnding && px >= 33200.0f && px <= 34500.0f) {
                 spawnDashToggleOrb(this);
             }
-            if (g_dashArmTriggered && !g_dashEnding) {
-                if (px >= 37800.0f && px <= 38300.0f && g_dashWaveStartX == 0.0f) {
+                        if (g_dashArmTriggered && !g_dashEnding) {
+                if (this->m_player1->m_isDart && g_dashWaveStartX == 0.0f) {
                     g_dashWaveStartX = this->m_player1->getPositionX();
                     g_dashWaveStartY = this->m_player1->getPositionY();
                 }
-                if (px >= 39150.0f && g_dashWaveStartX > 0.0f) {
+                if (!this->m_player1->m_isDart && g_dashWaveStartX > 0.0f) {
                     g_dashWaveEndX = this->m_player1->getPositionX();
                     g_dashEnding = true;
                     g_dashLoopCount = 1;
