@@ -338,7 +338,7 @@ static float g_reverseIntroTimer = 0.0f;
 static float g_reverseProgress = 100.0f;
 static float g_reverseStartX = 0.0f;
 
-static bool g_botTriggeredThisDeath = false; static float g_lastBotPct = 0.0f;
+static bool g_botTriggeredThisDeath = false; static float g_lastBotPct = 0.0f; static float g_lastBotPct = 0.0f;
 static bool g_botPromptOpen = false;
 static bool g_botActive = false;
 static float g_botFlipTimer = 2.5f;
@@ -535,7 +535,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
     void update(float dt) {
         int lvlIdx = getSecretLevelIndex(this->m_level);
 
-        if (lvlIdx == 2 && this->m_player1) {
+        if (lvlIdx == 2 && this->m_player1) { if (!this->m_player1->m_isDead) g_lastBotPct = this->getCurrentPercent();
             if (g_botPromptOpen) return;
             if (this->m_player1->m_isDead && !g_botActive && !g_botTriggeredThisDeath) {
                 if (g_lastBotPct >= 1.65f && g_lastBotPct <= 2.05f) {
