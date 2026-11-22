@@ -351,14 +351,14 @@ static float g_xstepTargetSpeed = 1.0f;
 static float g_xstepCurrentSpeed = 1.0f;
 static float g_xstepCooldown = 0.0f;
 
-static bool g_dashPromptOpen = false;
+static bool g_dashArmTriggered = false;
 static bool g_dashEnding = false;
-static int g_dashPhase = 0;
 static int g_dashLoopCount = 0;
 static float g_dashTimer = 0.0f;
-static float g_dashLoopStartX = 0.0f;
-static float g_dashLoopStartY = 0.0f;
-static float g_dashLoopEndX = 0.0f;
+static float g_dashWaveStartX = 0.0f;
+static float g_dashWaveStartY = 0.0f;
+static float g_dashWaveEndX = 0.0f;
+
 class ReversePopupHandler : public FLAlertLayerProtocol {
 public:
     void FLAlert_Clicked(FLAlertLayer*, bool btn2) override {
@@ -424,26 +424,10 @@ public:
 };
 static XstepPopupHandler g_xstepPopupHandler;
 
-class DashPopupHandler : public FLAlertLayerProtocol {
-public:
-    void FLAlert_Clicked(FLAlertLayer*, bool btn2) override {
-        g_dashPromptOpen = false;
-        auto pl = PlayLayer::get();
-        if (!pl) return;
-        if (!btn2) { pl->m_player1->m_isLocked = false; pl->onQuit(); return; }
-        unlockSecret("secret_level_22");
-        g_dashEnding = true;
-        g_dashPhase = 0;
-        g_dashLoopCount = 0;
-        g_dashTimer = 0.0f;
-        g_dashLoopEndX = pl->m_player1->getPositionX();
-        g_dashLoopStartX = std::max(0.0f, g_dashLoopEndX - 1150.0f);
-        g_dashLoopStartY = 215.0f;
-    }
-};
-static DashPopupHandler g_dashPopupHandler;
 class $modify(SecretPlayerHook, PlayerObject) { void playerDestroyed(bool p0) { PlayerObject::playerDestroyed(p0); auto pl = PlayLayer::get(); if (pl && this == pl->m_player1 && getSecretLevelIndex(pl->m_level) == 2 && !g_botActive && !g_botPromptOpen) { float pct = pl->getCurrentPercent(); if (pct >= 1.50f && pct <= 2.30f) { g_botTriggeredThisDeath = true; g_botPromptOpen = true; FMODAudioEngine::sharedEngine()->stopAllMusic(true); FLAlertLayer::create(&g_botPopupHandler, "Gravity Chaos", "Do you want to unleash Gravity Chaos?", "No", "Yes")->show(); } } } 
     void ringJump(RingObject* ring, bool p1) {
+        auto plDash = PlayLayer::get();
+        if (plDash && this == plDash->m_player1 && getSecretLevelIndex(plDash->m_level) == 22 && !g_dashArmTriggered && !g_dashEnding) { float p = plDash->getCurrentPercent(); if (p >= 81.2f && p <= 83.2f) { g_dashArmTriggered = true; unlockSecret("secret_level_22"); } }
         PlayerObject::ringJump(ring, p1);
         auto pl = PlayLayer::get();
         if (!pl || this != pl->m_player1) return;
@@ -503,8 +487,7 @@ class $modify(HiddenSecretsMod, PlayLayer) {
         g_xstepTargetSpeed = 1.0f;
         g_xstepCurrentSpeed = 1.0f;
         g_xstepCooldown = 0.0f;
-        g_dashPromptOpen = false;
-        g_dashEnding = false; g_dashPhase = 0; g_dashLoopCount = 0; g_dashTimer = 0.0f;
+        g_dashArmTriggered = false; g_dashEnding = false; g_dashLoopCount = 0; g_dashTimer = 0.0f; g_dashWaveStartX = 0.0f; g_dashWaveEndX = 0.0f;
         this->setScale(1.0f);
         applySpeedAndPitch(this, 1.0f);
         PlayLayer::resetLevel();
@@ -605,58 +588,58 @@ class $modify(HiddenSecretsMod, PlayLayer) {
             }
         }
 
-                if (lvlIdx == 22) {
-            if (g_dashPromptOpen) { this->m_player1->m_isLocked = true; return; }
+                        if (lvlIdx == 22 && this->m_player1) {
+            float pct = this->getCurrentPercent();
+            if (!g_dashArmTriggered && !g_dashEnding && pct >= 81.0f && pct <= 82.8f) {
+                spawnDashToggleOrb(this);
+            }
+            if (g_dashArmTriggered && !g_dashEnding) {
+                if (pct >= 91.6f && pct <= 92.0f && g_dashWaveStartX == 0.0f) {
+                    g_dashWaveStartX = this->m_player1->getPositionX();
+                    g_dashWaveStartY = this->m_player1->getPositionY();
+                }
+                if (pct >= 94.3f && g_dashWaveStartX > 0.0f) {
+                    g_dashWaveEndX = this->m_player1->getPositionX();
+                    g_dashEnding = true;
+                    g_dashLoopCount = 1;
+                    g_dashTimer = 0.0f;
+                    this->m_player1->setPosition({ g_dashWaveStartX, g_dashWaveStartY });
+                    this->m_gameState.m_cameraPosition.x = std::max(0.0f, g_dashWaveStartX - 110.0f);
+                }
+            }
             if (g_dashEnding) {
                 this->m_player1->m_isLocked = true;
                 g_dashTimer += dt;
-                if (g_dashPhase == 0) {
-                    float slowEase = std::min(1.0f, g_dashTimer / 1.3f);
-                    this->m_gameState.m_cameraPosition.x += 280.0f * (1.0f - slowEase * slowEase) * dt;
-                    if (g_dashTimer >= 1.6f) {
-                        g_dashPhase = 1;
-                        g_dashLoopCount = 1;
-                        g_dashTimer = 0.0f;
-                        this->m_player1->setPosition({ g_dashLoopStartX, g_dashLoopStartY });
-                        this->m_gameState.m_cameraPosition.x = std::max(0.0f, g_dashLoopStartX - 110.0f);
-                        auto fmod = FMODAudioEngine::sharedEngine();
-                        fmod->playMusic("Dash.mp3", false, 1.0f, 0);
-                        if (fmod->m_backgroundMusicChannel) {
-                            fmod->setMusicTimeMS(108000, true, 0);
-                        }
-                    }
-                    return;
+                float speedMult = 1.0f + (g_dashLoopCount - 1) * 0.12f;
+                float vol = std::max(0.0f, 1.0f - ((g_dashLoopCount - 1) / 10.0f));
+                auto fmod = FMODAudioEngine::sharedEngine();
+                if (fmod && fmod->m_backgroundMusicChannel) {
+                    fmod->m_backgroundMusicChannel->setPitch(speedMult);
+                    fmod->m_backgroundMusicChannel->setVolume(vol);
                 }
-                if (g_dashPhase == 1) {
-                    float speedMult = 1.0f + (g_dashLoopCount - 1) * 0.11f;
-                    float vol = std::max(0.0f, 1.0f - ((g_dashLoopCount - 1) / 10.0f));
-                    auto fmod = FMODAudioEngine::sharedEngine();
-                    if (fmod && fmod->m_backgroundMusicChannel) {
-                        fmod->m_backgroundMusicChannel->setPitch(speedMult);
-                        fmod->m_backgroundMusicChannel->setVolume(vol);
-                    }
-                    float curX = this->m_player1->getPositionX() + (380.0f * speedMult * dt);
-                    float waveY = g_dashLoopStartY + std::sin(g_dashTimer * 18.0f * speedMult) * 34.0f;
-                    this->m_player1->setPosition({ curX, waveY });
-                    this->m_gameState.m_cameraPosition.x = std::max(0.0f, curX - 140.0f);
+                float curX = this->m_player1->getPositionX() + (370.0f * speedMult * dt);
+                float waveY = g_dashWaveStartY + std::sin(g_dashTimer * 17.5f * speedMult) * 32.0f;
+                this->m_player1->setPosition({ curX, waveY });
+                this->m_gameState.m_cameraPosition.x = std::max(0.0f, curX - 130.0f);
 
-                    if (curX >= g_dashLoopEndX) {
-                        g_dashLoopCount++;
-                        g_dashTimer = 0.0f;
-                        if (g_dashLoopCount > 10) {
-                            g_dashEnding = false;
-                            if (fmod) fmod->stopAllMusic(true);
-                            this->onQuit();
-                            return;
+                if (curX >= g_dashWaveEndX) {
+                    g_dashLoopCount++;
+                    g_dashTimer = 0.0f;
+                    if (g_dashLoopCount > 10) {
+                        g_dashEnding = false;
+                        g_dashArmTriggered = false;
+                        if (fmod) {
+                            if (fmod->m_backgroundMusicChannel) { fmod->m_backgroundMusicChannel->setPitch(1.0f); fmod->m_backgroundMusicChannel->setVolume(1.0f); }
+                            fmod->stopAllMusic(true);
                         }
-                        this->m_player1->setPosition({ g_dashLoopStartX, g_dashLoopStartY });
-                        this->m_gameState.m_cameraPosition.x = std::max(0.0f, g_dashLoopStartX - 110.0f);
-                        if (fmod && fmod->m_backgroundMusicChannel) {
-                            fmod->setMusicTimeMS(108000, true, 0);
-                        }
+                        this->onQuit();
+                        return;
                     }
-                    return;
+                    this->m_player1->setPosition({ g_dashWaveStartX, g_dashWaveStartY });
+                    this->m_gameState.m_cameraPosition.x = std::max(0.0f, g_dashWaveStartX - 110.0f);
+                    if (fmod) fmod->setMusicTimeMS(108000, true, 0);
                 }
+                return;
             }
         }
 
